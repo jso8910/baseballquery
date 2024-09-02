@@ -1,0 +1,8 @@
+requests
+tqdm
+pandas
+tables
+h5py
+dask[dataframe]
+typing-extensions
+numpy
