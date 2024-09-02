@@ -9,6 +9,8 @@ Not implemented (as of when I finish this):
 - Full game stats (saves, holds, shutouts, etc.) for pitchers. This one is probably important
 - GB%, LD%, FB%, and PU% will deviate from fangraphs due to differences in data and it being quite subjective. Also, Fangraphs FB is more similar to FB+PU so that's what I used in HR/FB% calculations.
     - This probably is impossible to fix
+- With splits, ERA is pretty much nonsense. Just because, even if a pitcher leaves the game, they are credited with an earned run if a runner they left on base scores. Even if they aren't eligible for the split.
+    - In general, it's not really possible to coherently calculate ERA for splits. For example: if two hits come against righties then a lefty hits a homer, scoring 3 runs, is the earned runs against righties 0? or 1? or 2? It's not really possible to say. So, if you set any significant splits which eliminate PAs (basically anything other than set_split and set_subdivision), ignore ERA.
 
 
 Recipients of Retrosheet data are free to make any desired use of

@@ -21,8 +21,35 @@ class StatSplits:
         events_years_list = []
         for year in range(start_year, end_year + 1):
             events_years_list.append(pd.read_hdf(self.chadwick, f"year_{year}"))    # type: ignore
+
+        cwd = Path(__file__).parent
+        self.linear_weights = pd.read_csv(cwd / "linear_weights.csv")    # type: ignore
         self.events = pd.concat(events_years_list)  # type: ignore
         self.stats: pd.DataFrame|None = None
+        self.split = "year"
+        self.find = "player"
+
+    def set_split(self, split: str):
+        """
+        Set the split to be used for calculating pitching stats.
+
+        Parameters:
+        split (str): 'year', 'month', 'career', 'game'
+        """
+        split = split.lower()
+        assert split in ["year", "month", "career", "game"], f"Invalid split {split}. Valid splits are 'year', 'month', 'career', 'game'"
+        self.split = split
+
+    def set_subdivision(self, subdivision: str):
+        """
+        Set the sub-division to be used for calculating pitching stats.
+
+        Parameters:
+        subdivision (str): 'player' for individual players, 'team' for team totals
+        """
+        subdivision = subdivision.lower()
+        assert subdivision in ["player", "team"], f"Invalid sub-division {subdivision}. Valid sub-divisions are 'player', 'team'"
+        self.find = subdivision
 
     def set_days_of_week(self, days_of_week: list[str]):
         """
@@ -244,39 +271,17 @@ class BattingStatSplits(StatSplits):
         Class to calculate batting splits. Keep in mind that once you limit a split (other than "set_split" and "set_subdivision"), you cannot go back to the original data.
         """
         super().__init__(start_year, end_year)
-        cwd = Path(__file__).parent
-        linear_weights = pd.read_csv(cwd / "linear_weights.csv")    # type: ignore
-        self.batting_calculator = BattingStatsCalculator(self.events, linear_weights)   # type: ignore
+        self.batting_calculator: BattingStatsCalculator|None = None
 
     def calculate_stats(self):
         """
         Calculate batting stats based on the set splits.
         This method should be run after all splits have been set.
         """
+
+        self.batting_calculator = BattingStatsCalculator(self.events, self.linear_weights, find=self.find, split=self.split) # type: ignore
         self.batting_calculator.calculate_all_stats()
         self.stats = self.batting_calculator.stats
-
-    def set_split(self, split: str):
-        """
-        Set the split to be used for calculating batting stats.
-
-        Parameters:
-        split (str): 'year', 'month', 'career', 'game'
-        """
-        split = split.lower()
-        assert split in ["year", "month", "career", "game"], f"Invalid split {split}. Valid splits are 'year', 'month', 'career', 'game'"
-        self.batting_calculator.split = split
-
-    def set_subdivision(self, subdivision: str):
-        """
-        Set the sub-division to be used for calculating batting stats.
-
-        Parameters:
-        subdivision (str): 'player' for individual players, 'team' for team totals
-        """
-        subdivision = subdivision.lower()
-        assert subdivision in ["player", "team"], f"Invalid sub-division {subdivision}. Valid sub-divisions are 'player', 'team'"
-        self.batting_calculator.find = subdivision
 
 
 class PitchingStatSplits(StatSplits):
@@ -285,36 +290,15 @@ class PitchingStatSplits(StatSplits):
         Class to calculate pitching splits. Keep in mind that once you limit a split (other than "set_split" and "set_subdivision"), you cannot go back to the original data.
         """
         super().__init__(start_year, end_year)
-        cwd = Path(__file__).parent
-        linear_weights = pd.read_csv(cwd / "linear_weights.csv")    # type: ignore
-        self.pitching_calculator = PitchingStatsCalculator(self.events, linear_weights) # type: ignore
+        self.pitching_calculator: PitchingStatsCalculator|None = None 
 
     def calculate_stats(self):
         """
         Calculate batting stats based on the set splits.
         This method should be run after all splits have been set.
         """
+
+        self.pitching_calculator = PitchingStatsCalculator(self.events, self.linear_weights, find=self.find, split=self.split) # type: ignore
         self.pitching_calculator.calculate_all_stats()
         self.stats = self.pitching_calculator.stats
 
-    def set_split(self, split: str):
-        """
-        Set the split to be used for calculating pitching stats.
-
-        Parameters:
-        split (str): 'year', 'month', 'career', 'game'
-        """
-        split = split.lower()
-        assert split in ["year", "month", "career", "game"], f"Invalid split {split}. Valid splits are 'year', 'month', 'career', 'game'"
-        self.pitching_calculator.split = split
-
-    def set_subdivision(self, subdivision: str):
-        """
-        Set the sub-division to be used for calculating pitching stats.
-
-        Parameters:
-        subdivision (str): 'player' for individual players, 'team' for team totals
-        """
-        subdivision = subdivision.lower()
-        assert subdivision in ["player", "team"], f"Invalid sub-division {subdivision}. Valid sub-divisions are 'player', 'team'"
-        self.pitching_calculator.find = subdivision

@@ -20,4 +20,4 @@ if not (current_directory / "linear_weights.csv").exists():
     print("Linear weights not generated. Generating...")
     linear_weights.calc_all_weights()
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
