@@ -5,6 +5,7 @@ https://www.retrosheet.org/Nickname.htm
 https://www.retrosheet.org/BIOFILE.TXT
 https://www.retrosheet.org/game.htm#Regular%20Season%20Games
 """
+
 from io import BytesIO
 from pathlib import Path
 import zipfile
@@ -34,3 +35,13 @@ def download_games():
         request = requests.get(url)
         zip = zipfile.ZipFile(BytesIO(request.content))
         zip.extractall(download_dir)
+
+
+def download_year(year: int):
+    cwd = Path(__file__).parent
+    download_dir = cwd / "downloads"
+    download_dir.mkdir(parents=True, exist_ok=True)
+    url = f"https://www.retrosheet.org/events/{year}eve.zip"
+    request = requests.get(url)
+    zip = zipfile.ZipFile(BytesIO(request.content))
+    zip.extractall(download_dir)

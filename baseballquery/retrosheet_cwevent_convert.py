@@ -2,7 +2,7 @@ import subprocess
 from pathlib import Path
 from tqdm import tqdm
 import os
-import pandas as pd
+import pandas as pd  # type: ignore
 from collections import defaultdict
 
 chadwick_dtypes = {
@@ -104,7 +104,9 @@ def convert_files_to_csv():
     outdir.mkdir(parents=True, exist_ok=True)
     os.chdir(download_dir)
 
-    for file in tqdm(list(download_dir.iterdir()), desc="Converting retrosheet to Chadwick"):
+    for file in tqdm(
+        list(download_dir.iterdir()), desc="Converting retrosheet to Chadwick"
+    ):
         if not file.name[-4:] in (".EVN", ".EVA"):
             continue
         with open(outdir / f"{file.name}.csv", "w") as f:
@@ -112,10 +114,14 @@ def convert_files_to_csv():
                 [
                     "cwevent",
                     "-q",
-                    "-f", "0-2,4-6,8-17,26-28,30-45,47-50,58-79",
-                    "-x", "0-2,5,8,12-14,15-16,19-20,33-45,50,55",
-                    f"-y", f"{file.stem[:4]}",
-                    f"-n", f"{file}",
+                    "-f",
+                    "0-2,4-6,8-17,26-28,30-45,47-50,58-79",
+                    "-x",
+                    "0-2,5,8,12-14,15-16,19-20,33-45,50,55",
+                    f"-y",
+                    f"{file.stem[:4]}",
+                    f"-n",
+                    f"{file}",
                 ],
                 stdout=f,
             )
@@ -125,7 +131,7 @@ def convert_files_to_csv():
     for file in tqdm(list(outdir.iterdir()), desc="Converting Chadwick CSVs to HDF5"):
         df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"], dtype=chadwick_dtypes)  # type: ignore
         year: str = file.name[:4]
-        years[year] = pd.concat([years[year], df]) # type: ignore
+        years[year] = pd.concat([years[year], df])  # type: ignore
 
     baserunning_outcomes_not_pa: list[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12]
     fields: dict[int, str] = {
@@ -148,44 +154,49 @@ def convert_files_to_csv():
         23: "HR",
     }
     for year, df in tqdm(years.items(), desc="Saving HDF5 file"):
-        df["PA"] = (~df["EVENT_CD"].isin(baserunning_outcomes_not_pa + [13])).astype(int)   # type: ignore
+        df["PA"] = (~df["EVENT_CD"].isin(baserunning_outcomes_not_pa + [13])).astype(int)  # type: ignore
         df["AB"] = df["AB_FL"].astype(int)  # type: ignore
         df["SH"] = df["SH_FL"].astype(int)  # type: ignore
         df["SF"] = df["SF_FL"].astype(int)  # type: ignore
-        df["R"] = df["EVENT_RUNS_CT"].astype(int)   # type: ignore
-        df["RBI"] = df["RBI_CT"].astype(int)    # type: ignore
-        df["SB"] = df["RUN1_SB_FL"].astype(int) + df["RUN2_SB_FL"].astype(int) + df["RUN3_SB_FL"].astype(int)   # type: ignore
-        df["CS"] = df["RUN1_CS_FL"].astype(int) + df["RUN2_CS_FL"].astype(int) + df["RUN3_CS_FL"].astype(int)   # type: ignore
+        df["R"] = df["EVENT_RUNS_CT"].astype(int)  # type: ignore
+        df["RBI"] = df["RBI_CT"].astype(int)  # type: ignore
+        df["SB"] = df["RUN1_SB_FL"].astype(int) + df["RUN2_SB_FL"].astype(int) + df["RUN3_SB_FL"].astype(int)  # type: ignore
+        df["CS"] = df["RUN1_CS_FL"].astype(int) + df["RUN2_CS_FL"].astype(int) + df["RUN3_CS_FL"].astype(int)  # type: ignore
         for field, name in fields.items():
-            df[name] = df["EVENT_CD"].eq(field).astype(int) # type: ignore
-        df["H"] = df["EVENT_CD"].isin([20, 21, 22, 23]).astype(int) # type: ignore
+            df[name] = df["EVENT_CD"].eq(field).astype(int)  # type: ignore
+        df["H"] = df["EVENT_CD"].isin([20, 21, 22, 23]).astype(int)  # type: ignore
         df["DP"] = df["DP_FL"].astype(int)  # type: ignore
         df["TP"] = df["TP_FL"].astype(int)  # type: ignore
-        df["ROE"] = (df["BAT_SAFE_ERR_FL"] & df["EVENT_CD"].eq(18)).astype(int) # type: ignore
+        df["ROE"] = (df["BAT_SAFE_ERR_FL"] & df["EVENT_CD"].eq(18)).astype(int)  # type: ignore
         df["WP"] = df["WP_FL"].astype(int)  # type: ignore
-        df["P"] = (df["PA_BALL_CT"] + df["PA_STRIKE_CT"] - df["PA_OTHER_BALL_CT"] - df["PA_OTHER_STRIKE_CT"]) * (df["PA"] | df["R"])
+        df["P"] = (
+            df["PA_BALL_CT"]
+            + df["PA_STRIKE_CT"]
+            - df["PA_OTHER_BALL_CT"]
+            - df["PA_OTHER_STRIKE_CT"]
+        ) * (df["PA"] | df["R"])
         df["GB"] = df["BATTEDBALL_CD"].eq("G").astype(int)  # type: ignore
         df["FB"] = df["BATTEDBALL_CD"].eq("F").astype(int)  # type: ignore
         df["LD"] = df["BATTEDBALL_CD"].eq("L").astype(int)  # type: ignore
         df["PU"] = df["BATTEDBALL_CD"].eq("P").astype(int)  # type: ignore
         df["ER"] = (
-            df["BAT_DEST_ID"].isin([4, 6]).astype(int) +   # type: ignore
-            df["RUN1_DEST_ID"].isin([4, 6]).astype(int) +  # type: ignore
-            df["RUN2_DEST_ID"].isin([4, 6]).astype(int) +  # type: ignore
-            df["RUN3_DEST_ID"].isin([4, 6]).astype(int)    # type: ignore
+            df["BAT_DEST_ID"].isin([4, 6]).astype(int)  # type: ignore
+            + df["RUN1_DEST_ID"].isin([4, 6]).astype(int)  # type: ignore
+            + df["RUN2_DEST_ID"].isin([4, 6]).astype(int)  # type: ignore
+            + df["RUN3_DEST_ID"].isin([4, 6]).astype(int)  # type: ignore
         )
         df["T_UER"] = (
-            df["BAT_DEST_ID"].eq(6).astype(int) +   # type: ignore
-            df["RUN1_DEST_ID"].eq(6).astype(int) +  # type: ignore
-            df["RUN2_DEST_ID"].eq(6).astype(int) +  # type: ignore
-            df["RUN3_DEST_ID"].eq(6).astype(int)    # type: ignore
+            df["BAT_DEST_ID"].eq(6).astype(int)  # type: ignore
+            + df["RUN1_DEST_ID"].eq(6).astype(int)  # type: ignore
+            + df["RUN2_DEST_ID"].eq(6).astype(int)  # type: ignore
+            + df["RUN3_DEST_ID"].eq(6).astype(int)  # type: ignore
         )
 
         df["UER"] = (
-            df["BAT_DEST_ID"].isin([5, 7]).astype(int) +   # type: ignore
-            df["RUN1_DEST_ID"].isin([5, 7]).astype(int) +  # type: ignore
-            df["RUN2_DEST_ID"].isin([5, 7]).astype(int) +  # type: ignore
-            df["RUN3_DEST_ID"].isin([5, 7]).astype(int)    # type: ignore
+            df["BAT_DEST_ID"].isin([5, 7]).astype(int)  # type: ignore
+            + df["RUN1_DEST_ID"].isin([5, 7]).astype(int)  # type: ignore
+            + df["RUN2_DEST_ID"].isin([5, 7]).astype(int)  # type: ignore
+            + df["RUN3_DEST_ID"].isin([5, 7]).astype(int)  # type: ignore
         )
 
         df.to_hdf(cwd / "chadwick.hdf5", key=f"year_{year}", format="table")  # type: ignore

@@ -2,7 +2,7 @@
 
 It's a stathead replacement, plain and simple.
 
-When you install this package and import it for the first time, it will download many GB of data from retrosheet. Eventually, it will be deleted, but you will get a total of 12 GB of data in the form of an hdf5 file. This is a lot of data, but it's necessary. This whole process (including calculating linear weights) can take upwards of an hour so start running this in the background once you install it before you use it.
+When you install this package and import it for the first time, it will download many GB of data from retrosheet. Eventually, it will be deleted, but you will get a total of 12 GB of data in the form of an hdf5 file. This is a lot of data, but it's necessary. This whole process (including calculating linear weights) can take upwards of half an hour so start running this in the background once you install it before you use it.
 
 Not implemented (as of when I finish this):
 - Park factors
