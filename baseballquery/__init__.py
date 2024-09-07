@@ -25,7 +25,7 @@ if not (current_directory / "linear_weights.csv").exists():
     print("Linear weights not generated. Generating...")
     linear_weights.calc_all_weights()
 
-with h5py.File(current_directory / "chadwick.hdf5") as f:   # type: ignore
+with h5py.File(current_directory / "chadwick.hdf5") as f:
     years_h5 = list(f.keys())   # type: ignore
 for year in years:
     if f"year_{year}" not in years_h5:
@@ -34,4 +34,4 @@ for year in years:
         print(f"Generating Chadwick event files for {year}...")
         retrosheet_cwevent_convert.convert_files_to_csv()
             
-__version__ = "0.0.2"
+__version__ = "0.0.3"
