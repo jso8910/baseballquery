@@ -39,6 +39,8 @@ def calc_average_stats(events: pd.DataFrame):
     per_600_pa_pd = pd.DataFrame([per_600_pa])
     return per_600_pa_pd
 
+from copy import deepcopy
+import numpy as np
 def calc_linear_weights(events: pd.DataFrame):
     per_600_pa = calc_average_stats(events)
     run_exp_by_sit = [
@@ -47,13 +49,22 @@ def calc_linear_weights(events: pd.DataFrame):
         for n in range(24)
     ]
 
-    for _, play in tqdm(events.iterrows(), total=events.shape[0], position=1, desc="Calculating RE24", leave=False):
-        base_state = int(play["END_BASES_CD"])  # type: ignore
-        outs = int(play["OUTS_CT"]) + int(play["EVENT_OUTS_CT"])  # type: ignore
-        if outs >= 3:
-            continue
-        run_exp_by_sit[base_state * 3 + outs][2] += int(play["FATE_RUNS_CT"])  # type: ignore
-        run_exp_by_sit[base_state * 3 + outs][3] += 1
+    events["END_BASES_CD"] = events["END_BASES_CD"].astype(int) # type: ignore
+    events["OUTS_TEMP"] = events["EVENT_OUTS_CT"].astype(int) + events["OUTS_CT"].astype(int)   # type: ignore
+    groups = events[events["OUTS_TEMP"] < 3].groupby(["END_BASES_CD", "OUTS_TEMP"]) # type: ignore
+    for _, g in groups: # type: ignore
+        run_exp_by_sit[g["END_BASES_CD"].iloc[0] * 3 + g["OUTS_TEMP"].iloc[0]][2] += g["FATE_RUNS_CT"].sum()  # type: ignore
+        run_exp_by_sit[g["END_BASES_CD"].iloc[0] * 3 + g["OUTS_TEMP"].iloc[0]][3] += g["FATE_RUNS_CT"].count()  # type: ignore
+    # for _, play in tqdm(events.iterrows(), total=events.shape[0], position=1, desc="Calculating RE24", leave=False):
+    #     base_state = int(play["END_BASES_CD"])  # type: ignore
+    #     outs = int(play["OUTS_CT"]) + int(play["EVENT_OUTS_CT"])  # type: ignore
+    #     if outs >= 3:
+    #         continue
+    #     run_exp_by_sit[base_state * 3 + outs][2] += int(play["FATE_RUNS_CT"])  # type: ignore
+    #     run_exp_by_sit[base_state * 3 + outs][3] += 1
+    #
+    # print(run_exp_copy, run_exp_by_sit)
+    # assert run_exp_copy == run_exp_by_sit
 
     for idx in range(len(run_exp_by_sit)):
         run_exp_by_sit[idx][4] = run_exp_by_sit[idx][2] / run_exp_by_sit[idx][3]
@@ -108,35 +119,49 @@ def calc_linear_weights(events: pd.DataFrame):
         23: "HR",
     }
 
-    for _, play in tqdm(events.iterrows(), total=events.shape[0], desc="Calculating run expectancy by outcome", leave=False):
-        if int(play["EVENT_CD"]) not in event_code_to_event:  # type: ignore
-            continue
-        base_state = int(play["START_BASES_CD"])  # type: ignore
-        end_base_state = int(play["END_BASES_CD"])  # type: ignore
-        outs = int(play["OUTS_CT"])  # type: ignore
-        end_outs = outs + int(play["EVENT_OUTS_CT"])  # type: ignore
-        if end_outs >= 3:
-            end_run_exp = 0.0
-        else:
-            end_run_exp = run_exp_by_sit[end_base_state * 3 + end_outs][4]
 
-        start_run_exp = run_exp_by_sit[base_state * 3 + outs][4]
-        run_expectancy_total[
-            event_code_to_event[int(play["EVENT_CD"])]  # type: ignore
-        ] += (
-            end_run_exp + int(play["EVENT_RUNS_CT"])  # type: ignore
-        ) - start_run_exp
-        if int(play["EVENT_CD"]) in (20, 21, 22):  # type: ignore
+    # events = events[events["EVENT_CD"].astype(int).isin(event_code_to_event.keys())]  # type: ignore
+    events["START_BASES_CD"] = events["START_BASES_CD"].astype(int)  # type: ignore
+    events["END_BASES_CD"] = events["END_BASES_CD"].astype(int)  # type: ignore
+    events["OUTS_CT"] = events["OUTS_CT"].astype(int)  # type: ignore
+    run_exp_by_sit = np.array(run_exp_by_sit, dtype=float)
+    run_exp_by_sit = np.vstack([run_exp_by_sit, np.array([3, 0, 0, 0, 0.0])])
+    run_exp_by_sit = pd.DataFrame(run_exp_by_sit)
+
+    run_exps_end = run_exp_by_sit.iloc[events["END_BASES_CD"] * 3 + events["OUTS_TEMP"]]    # type: ignore
+    run_exps_end = run_exps_end.reset_index(drop=True)  # type: ignore
+    events["END_RUN_EXP"] = np.where(events["OUTS_TEMP"] < 3, run_exps_end.loc[:, 4], 0.0)  # type: ignore
+
+
+    run_exps_start = run_exp_by_sit.iloc[events["START_BASES_CD"] * 3 + events["OUTS_CT"]]  # type: ignore
+    run_exps_start = run_exps_start.reset_index(drop=True)  # type: ignore
+    # Completely bizarre workaround. Have 0 idea why this is necessary to use a fake np.where
+    events["START_RUN_EXP"] = np.where(True, run_exps_start[4], 0)  # type: ignore
+
+
+    groups = events.groupby("EVENT_CD") # type: ignore
+    for _, g in groups:
+        if int(g["EVENT_CD"].iloc[0]) not in event_code_to_event:  # type: ignore
+            continue
+
+        run_expectancy_total[event_code_to_event[int(g["EVENT_CD"].iloc[0])]] += ( # type: ignore
+            g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
+        ) - g["START_RUN_EXP"].sum()    # type: ignore
+        if int(g["EVENT_CD"].iloc[0]) in (20, 21, 22):  # type: ignore
             run_expectancy_total["HitInPlay"] += (
-                end_run_exp + int(play["EVENT_RUNS_CT"])  # type: ignore
-            ) - start_run_exp
-            run_expectancy_freq["HitInPlay"] += 1
-        run_expectancy_freq[event_code_to_event[int(play["EVENT_CD"])]] += 1  # type: ignore
-        if event_code_to_event[int(play["EVENT_CD"])] in ("1B", "2B", "3B", "Out"):  # type: ignore
+                g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
+            ) - g["START_RUN_EXP"].sum()    # type: ignore
+            run_expectancy_freq["HitInPlay"] += g.shape[0]
+        run_expectancy_freq[event_code_to_event[int(g["EVENT_CD"].iloc[0])]] += g.shape[0]  # type: ignore
+        if event_code_to_event[int(g["EVENT_CD"].iloc[0])] in ("1B", "2B", "3B", "Out"):    # type: ignore
             run_expectancy_total["BIP"] += (
-                end_run_exp + int(play["EVENT_RUNS_CT"])  # type: ignore
-            ) - start_run_exp
-            run_expectancy_freq["BIP"] += 1
+                g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
+            ) - g["START_RUN_EXP"].sum()    # type: ignore
+            run_expectancy_freq["BIP"] += g.shape[0]
+
+    run_exps_start = run_exp_by_sit.iloc[events["START_BASES_CD"] * 3 + events["OUTS_CT"]]  # type: ignore
+    run_exps_start = run_exps_start.reset_index(drop=True)  # type: ignore
+
 
     for event in run_expectancy_total:
         run_expectancy_avg[event] = run_expectancy_total[event] / run_expectancy_freq[event]
