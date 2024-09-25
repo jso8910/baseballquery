@@ -1,0 +1,3 @@
+[submodule "baseballquery/register"]
+	path = baseballquery/register
+	url = https://github.com/chadwickbureau/register

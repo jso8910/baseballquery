@@ -12,6 +12,10 @@ Not implemented (as of when I finish this):
 - With splits, ERA is pretty much nonsense. Just because, even if a pitcher leaves the game, they are credited with an earned run if a runner they left on base scores. Even if they aren't eligible for the split.
     - In general, it's not really possible to coherently calculate ERA for splits. For example: if two hits come against righties then a lefty hits a homer, scoring 3 runs, is the earned runs against righties 0? or 1? or 2? It's not really possible to say. So, if you set any significant splits which eliminate PAs (basically anything other than set_split and set_subdivision), ignore ERA.
 
+If you want live data.... that's coming! Shortfalls though:
+1. The team abbreviations are slightly different (eg NYY from statsapi instead of NYA from retrosheet)
+2. Things like BASE1_RUN_ID which show who's on base only work on plays when the runner moves. 95% of the time that will be fine, but current year data you won't be able to filter by who's on base by using a custom dataframe filter  
+
 
 Recipients of Retrosheet data are free to make any desired use of
 the information, including (but not limited to) selling it,
