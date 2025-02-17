@@ -30,9 +30,7 @@ def calc_average_stats(events: pd.DataFrame):
     }
 
     # Correspondance of event_cd to totals
-    for stat in tqdm(
-        totals.keys(), position=1, desc="Calculating league average", leave=False
-    ):
+    for stat in tqdm(totals.keys(), position=1, desc="Calculating league average", leave=False):
         if stat == "IP":
             totals[stat] = events["EVENT_OUTS_CT"].sum() / 3  # type: ignore
             continue
@@ -169,18 +167,14 @@ def calc_linear_weights(events: pd.DataFrame):
             ].sum()  # type: ignore
             run_expectancy_freq["HitInPlay"] += g.shape[0]
         if event_code_to_event[int(g["EVENT_CD"].iloc[0])] in ("1B", "2B", "3B", "Out"):  # type: ignore
-            run_expectancy_total["BIP"] += (
-                g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
-            ) - g[
+            run_expectancy_total["BIP"] += (g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()) - g[  # type: ignore
                 "START_RUN_EXP"
             ].sum()  # type: ignore
             run_expectancy_freq["BIP"] += g.shape[0]
 
     # Calculate the average run expectancy for each event
     for event in run_expectancy_total:
-        run_expectancy_avg[event] = (
-            run_expectancy_total[event] / run_expectancy_freq[event]
-        )
+        run_expectancy_avg[event] = run_expectancy_total[event] / run_expectancy_freq[event]
 
     # Rescale run expectancies with respect to outs being 0 runs added
     for event in run_expectancy_total:
@@ -214,9 +208,7 @@ def calc_linear_weights(events: pd.DataFrame):
     run_expectancy_avg["year"] = 0
     # Calculate a bunch of information that are useful for other calculations
     run_expectancy_avg["woba_scale"] = obp_numerator / woba_numerator
-    run_expectancy_avg["avg_woba"] = (
-        woba_numerator * run_expectancy_avg["woba_scale"] / 600
-    )
+    run_expectancy_avg["avg_woba"] = woba_numerator * run_expectancy_avg["woba_scale"] / 600
     run_expectancy_avg["lg_runs_pa"] = per_600_pa["R"] / 600
     pa_scale = events["PA"].sum() / 600  # type: ignore
 
@@ -246,15 +238,18 @@ def calc_linear_weights(events: pd.DataFrame):
     return run_expectancy_avg
 
 
-def calc_all_weights():
+def calc_weights(years_list=None):
     cwd = Path(__file__).parent
     chadwick_file = cwd / "chadwick.hdf5"
 
     linear_weights_dir = cwd
     linear_weights_dir.mkdir(parents=True, exist_ok=True)
 
-    with h5py.File(chadwick_file) as f: # type: ignore
-        years: list[str] = list(f.keys())   # type: ignore
+    with h5py.File(chadwick_file) as f:  # type: ignore
+        years: list[str] = list(f.keys())  # type: ignore
+
+    if years_list:
+        years = [year for year in years if int(year[-4:]) in years_list]
 
     weights_pd_list = []
     for year in tqdm(years, desc="Years", position=0, leave=True):

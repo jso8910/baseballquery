@@ -81,9 +81,7 @@ def convert_files_to_csv():
     outdir.mkdir(parents=True, exist_ok=True)
     os.chdir(download_dir)
 
-    for file in tqdm(
-        list(download_dir.iterdir()), desc="Converting retrosheet to Chadwick"
-    ):
+    for file in tqdm(list(download_dir.iterdir()), desc="Converting retrosheet to Chadwick"):
         if not file.name[-4:] in (".EVN", ".EVA"):
             continue
         with open(outdir / f"{file.name}.csv", "w") as f:
@@ -94,7 +92,7 @@ def convert_files_to_csv():
                     "-f",
                     "0-2,4-6,8-9,12-13,16-17,26-28,32-34,36-45,47,50,58-61,66-77",
                     "-x",
-                    "0-2,12-14,16,19-20,33,38-39,44-45,55",
+                    "0-2,12-14,16,19-20,33,39,45,50,55",
                     f"-y",
                     f"{file.stem[:4]}",
                     f"-n",
@@ -147,12 +145,9 @@ def convert_files_to_csv():
         df["TP"] = df["TP_FL"].astype(int)  # type: ignore
         df["ROE"] = (df["BAT_SAFE_ERR_FL"] & df["EVENT_CD"].eq(18)).astype(int)  # type: ignore
         df["WP"] = df["WP_FL"].astype(int)  # type: ignore
-        df["P"] = (
-            df["PA_BALL_CT"]
-            + df["PA_STRIKE_CT"]
-            - df["PA_OTHER_BALL_CT"]
-            - df["PA_OTHER_STRIKE_CT"]
-        ) * (df["PA"] | df["R"])
+        df["P"] = (df["PA_BALL_CT"] + df["PA_STRIKE_CT"] - df["PA_OTHER_BALL_CT"] - df["PA_OTHER_STRIKE_CT"]) * (
+            df["PA"] | df["PA_TRUNC_FL"]
+        )
         df["GB"] = df["BATTEDBALL_CD"].eq("G").astype(int)  # type: ignore
         df["FB"] = df["BATTEDBALL_CD"].eq("F").astype(int)  # type: ignore
         df["LD"] = df["BATTEDBALL_CD"].eq("L").astype(int)  # type: ignore
