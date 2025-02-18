@@ -10,7 +10,7 @@ import h5py  # type: ignore
 
 current_directory = Path(__file__).parent
 
-START_YEAR = 1912
+START_YEAR = 2022
 END_YEAR = 2024
 years = [year for year in range(START_YEAR, END_YEAR + 1)]
 
@@ -26,8 +26,11 @@ years = [year for year in range(START_YEAR, END_YEAR + 1)]
 #     print("Linear weights not generated. Generating...")
 #     linear_weights.calc_all_weights()
 
-with h5py.File(current_directory / "chadwick.hdf5") as f:
-    years_h5 = list(f.keys())  # type: ignore
+if (current_directory / "chadwick.hdf5").exists():
+    with h5py.File(current_directory / "chadwick.hdf5") as f:
+        years_h5 = list(f.keys())  # type: ignore
+else:
+    years_h5 = []
 years_updated = []
 for year in years:
     if f"year_{year}" not in years_h5:

@@ -506,8 +506,8 @@ class PitchingStatsCalculator(StatCalculator):
                 if stat == "GS":
                     for game_id in group["GAME_ID"].unique():  # type: ignore
                         game = group[group["GAME_ID"] == game_id]  # type: ignore
-                        if game["PIT_START_FL"].iloc[0] == True:  # type: ignore
-                            self.stats.loc[player_row_idx, stat] += 1
+                        if game["RESP_PIT_START_FL"].iloc[0] == True:  # type: ignore
+                            self.stats.loc[player_row_idx, stat] += 1   # type: ignore
                     continue
                 if stat == "IP":
                     self.stats.loc[player_row_idx, stat] = group["EVENT_OUTS_CT"].sum() / 3  # type: ignore

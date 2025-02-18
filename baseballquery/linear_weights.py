@@ -1,7 +1,7 @@
 from tqdm import tqdm
-import pandas as pd  # type: ignore
+import pandas as pd
 from pathlib import Path
-import h5py  # type: ignore
+import h5py
 import numpy as np
 
 
@@ -32,9 +32,9 @@ def calc_average_stats(events: pd.DataFrame):
     # Correspondance of event_cd to totals
     for stat in tqdm(totals.keys(), position=1, desc="Calculating league average", leave=False):
         if stat == "IP":
-            totals[stat] = events["EVENT_OUTS_CT"].sum() / 3  # type: ignore
+            totals[stat] = events["EVENT_OUTS_CT"].sum() / 3
             continue
-        totals[stat] = events[stat].sum()  # type: ignore
+        totals[stat] = events[stat].sum()
 
     per_600_pa: dict[str, float | str] = totals.copy()  # type: ignore
     scaling = 600 / totals["PA"]
@@ -57,10 +57,10 @@ def calc_linear_weights(events: pd.DataFrame):
     ]
 
     # Creates 24 base-out state groups. Excludes events with 3 outs at the end of the play
-    groups = events[events["OUTS_CT"] < 3].groupby(["START_BASES_CD", "OUTS_CT"])  # type: ignore
-    for _, g in groups:  # type: ignore
-        run_exp_by_sit[g["START_BASES_CD"].iloc[0] * 3 + g["OUTS_CT"].iloc[0]][2] += g["FATE_RUNS_CT"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
-        run_exp_by_sit[g["START_BASES_CD"].iloc[0] * 3 + g["OUTS_CT"].iloc[0]][3] += g["FATE_RUNS_CT"].count()  # type: ignore
+    groups = events[events["OUTS_CT"] < 3].groupby(["START_BASES_CD", "OUTS_CT"])
+    for _, g in groups:
+        run_exp_by_sit[g["START_BASES_CD"].iloc[0] * 3 + g["OUTS_CT"].iloc[0]][2] += g["FATE_RUNS_CT"].sum() + g["EVENT_RUNS_CT"].sum()
+        run_exp_by_sit[g["START_BASES_CD"].iloc[0] * 3 + g["OUTS_CT"].iloc[0]][3] += g["FATE_RUNS_CT"].count()
 
     # Calculate the final RE24 matrix
     for idx in range(len(run_exp_by_sit)):
@@ -132,44 +132,44 @@ def calc_linear_weights(events: pd.DataFrame):
 
     # Calculate the run expectancy for the start and end of the play
     # This is done by using series as indices for the base-out state
-    run_exps_end = run_exp_by_sit.iloc[events["END_BASES_CD"] * 3 + events["OUTS_END"]]  # type: ignore
-    run_exps_end = run_exps_end.reset_index(drop=True)  # type: ignore
+    run_exps_end = run_exp_by_sit.iloc[events["END_BASES_CD"] * 3 + events["OUTS_END"]]
+    run_exps_end = run_exps_end.reset_index(drop=True)
     # Makes sure that the run expectancy is 0 if the play ends with 3 outs
-    events["END_RUN_EXP"] = np.where(events["OUTS_END"] < 3, run_exps_end.loc[:, 4], 0.0)  # type: ignore
+    events["END_RUN_EXP"] = np.where(events["OUTS_END"] < 3, run_exps_end.loc[:, 4], 0.0)
 
-    run_exps_start = run_exp_by_sit.iloc[events["START_BASES_CD"] * 3 + events["OUTS_CT"]]  # type: ignore
-    run_exps_start = run_exps_start.reset_index(drop=True)  # type: ignore
+    run_exps_start = run_exp_by_sit.iloc[events["START_BASES_CD"] * 3 + events["OUTS_CT"]]
+    run_exps_start = run_exps_start.reset_index(drop=True)
     # Completely bizarre workaround. Have 0 idea why this is necessary to use a fake np.where
-    events["START_RUN_EXP"] = np.where(True, run_exps_start[4], 0)  # type: ignore
+    events["START_RUN_EXP"] = np.where(True, run_exps_start[4], 0)
 
     # Create groups of events with the same event code
-    groups = events.groupby("EVENT_CD")  # type: ignore
+    groups = events.groupby("EVENT_CD")
     for _, g in groups:
         # These are events we can ignore (like pickoffs, etc)
-        if int(g["EVENT_CD"].iloc[0]) not in event_code_to_event:  # type: ignore
+        if int(g["EVENT_CD"].iloc[0]) not in event_code_to_event:
             continue
 
         # Modify the correct event. End run exp + runs scored - start run exp
-        run_expectancy_total[event_code_to_event[int(g["EVENT_CD"].iloc[0])]] += (  # type: ignore
-            g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
+        run_expectancy_total[event_code_to_event[int(g["EVENT_CD"].iloc[0])]] += (
+            g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()
         ) - g[
             "START_RUN_EXP"
-        ].sum()  # type: ignore
+        ].sum()
         # Get the number of events
-        run_expectancy_freq[event_code_to_event[int(g["EVENT_CD"].iloc[0])]] += g.shape[0]  # type: ignore
+        run_expectancy_freq[event_code_to_event[int(g["EVENT_CD"].iloc[0])]] += g.shape[0]
 
         # Some events have two different things that need to be chnaged
-        if int(g["EVENT_CD"].iloc[0]) in (20, 21, 22):  # type: ignore
+        if int(g["EVENT_CD"].iloc[0]) in (20, 21, 22):
             run_expectancy_total["HitInPlay"] += (
-                g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()  # type: ignore
+                g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()
             ) - g[
                 "START_RUN_EXP"
-            ].sum()  # type: ignore
+            ].sum()
             run_expectancy_freq["HitInPlay"] += g.shape[0]
-        if event_code_to_event[int(g["EVENT_CD"].iloc[0])] in ("1B", "2B", "3B", "Out"):  # type: ignore
-            run_expectancy_total["BIP"] += (g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()) - g[  # type: ignore
+        if event_code_to_event[int(g["EVENT_CD"].iloc[0])] in ("1B", "2B", "3B", "Out"):
+            run_expectancy_total["BIP"] += (g["END_RUN_EXP"].sum() + g["EVENT_RUNS_CT"].sum()) - g[
                 "START_RUN_EXP"
-            ].sum()  # type: ignore
+            ].sum()
             run_expectancy_freq["BIP"] += g.shape[0]
 
     # Calculate the average run expectancy for each event
@@ -209,18 +209,18 @@ def calc_linear_weights(events: pd.DataFrame):
     # Calculate a bunch of information that are useful for other calculations
     run_expectancy_avg["woba_scale"] = obp_numerator / woba_numerator
     run_expectancy_avg["avg_woba"] = woba_numerator * run_expectancy_avg["woba_scale"] / 600
-    run_expectancy_avg["lg_runs_pa"] = per_600_pa["R"] / 600
-    pa_scale = events["PA"].sum() / 600  # type: ignore
+    run_expectancy_avg["lg_runs_pa"] = per_600_pa["R"] / 600    # type: ignore
+    pa_scale = events["PA"].sum() / 600
 
     # Calculates the average league ERA
     # 4 = earned, 6 = team unearned but earned to the pitcher
     run_expectancy_avg["lg_era"] = (
         9
         * (
-            events["BAT_DEST_ID"].isin([4, 6]).astype(int).sum()  # type: ignore
-            + events["RUN1_DEST_ID"].isin([4, 6]).astype(int).sum()  # type: ignore
-            + events["RUN2_DEST_ID"].isin([4, 6]).astype(int).sum()  # type: ignore
-            + events["RUN3_DEST_ID"].isin([4, 6]).astype(int).sum()  # type: ignore
+            events["BAT_DEST_ID"].isin([4, 6]).astype(int).sum()
+            + events["RUN1_DEST_ID"].isin([4, 6]).astype(int).sum()
+            + events["RUN2_DEST_ID"].isin([4, 6]).astype(int).sum()
+            + events["RUN3_DEST_ID"].isin([4, 6]).astype(int).sum()
         )
         / (per_600_pa["IP"] * pa_scale)
     )
@@ -234,7 +234,7 @@ def calc_linear_weights(events: pd.DataFrame):
         / per_600_pa["IP"]
     )
     # League average HR/FB%
-    run_expectancy_avg["lg_hr_fb"] = per_600_pa["HR"] * pa_scale / (events["FB"].sum() + events["PU"].sum())  # type: ignore
+    run_expectancy_avg["lg_hr_fb"] = per_600_pa["HR"] * pa_scale / (events["FB"].sum() + events["PU"].sum())
     return run_expectancy_avg
 
 
@@ -245,20 +245,20 @@ def calc_weights(years_list=None):
     linear_weights_dir = cwd
     linear_weights_dir.mkdir(parents=True, exist_ok=True)
 
-    with h5py.File(chadwick_file) as f:  # type: ignore
-        years: list[str] = list(f.keys())  # type: ignore
+    with h5py.File(chadwick_file) as f:
+        years: list[str] = list(f.keys())
 
     if years_list:
         years = [year for year in years if int(year[-4:]) in years_list]
 
     weights_pd_list = []
     for year in tqdm(years, desc="Years", position=0, leave=True):
-        events = pd.read_hdf(chadwick_file, year)  # type: ignore
-        weights = calc_linear_weights(events)  # type: ignore
+        events = pd.read_hdf(chadwick_file, year)
+        weights = calc_linear_weights(events)   # type: ignore
         weights["year"] = int(year[-4:])
         weights_pd = pd.DataFrame(weights)
-        weights_pd_list.append(weights_pd)  # type: ignore
+        weights_pd_list.append(weights_pd)
 
-    weights_pd = pd.concat(weights_pd_list, ignore_index=True)  # type: ignore
-    weights_pd.set_index("year", inplace=True)  # type: ignore
-    _ = weights_pd.to_csv(linear_weights_dir / f"linear_weights.csv")  # type: ignore
+    weights_pd = pd.concat(weights_pd_list, ignore_index=True)
+    weights_pd.set_index("year", inplace=True)
+    _ = weights_pd.to_csv(linear_weights_dir / f"linear_weights.csv")

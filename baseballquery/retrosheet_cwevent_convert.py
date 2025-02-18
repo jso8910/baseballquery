@@ -57,7 +57,6 @@ chadwick_dtypes = {
     "PA_TRUNC_FL": "bool",
     "START_BASES_CD": "int64",
     "END_BASES_CD": "int64",
-    "PIT_START_FL": "bool",
     "RESP_PIT_START_FL": "bool",
     "PA_BALL_CT": "int64",
     "PA_OTHER_BALL_CT": "int64",
@@ -92,7 +91,7 @@ def convert_files_to_csv():
                     "-f",
                     "0-2,4-6,8-9,12-13,16-17,26-28,32-34,36-45,47,50,58-61,66-77",
                     "-x",
-                    "0-2,12-14,16,19-20,33,39,45,50,55",
+                    "0-2,12-14,16,20,33,38-39,44-45,50,55",
                     f"-y",
                     f"{file.stem[:4]}",
                     f"-n",
@@ -171,6 +170,8 @@ def convert_files_to_csv():
             + df["RUN2_DEST_ID"].isin([5, 7]).astype(int)  # type: ignore
             + df["RUN3_DEST_ID"].isin([5, 7]).astype(int)  # type: ignore
         )
+
+        df["MLB_STATSAPI_APPROX"] = False
 
         df.to_hdf(cwd / "chadwick.hdf5", key=f"year_{year}", format="table")  # type: ignore
 
