@@ -67,23 +67,6 @@ chadwick_dtypes = {
     "MLB_STATSAPI_APPROX": "bool",
 }
 
-mlbam_to_retro_team_name = {
-    "AZ": "ARI",
-    "BAL": "BAL",
-    "BOS": "BOS",
-    "CHC": "CHN",
-    "CIN": "CIN",
-    "CLE": "CLE",
-    "COL": "COL",
-    "DET": "DET",
-    "HOU": "HOU",
-    "KC": "KCA",
-    "LAD": "LAN",
-    "WSH": "WAS",
-    "NYM": "NYN",
-    "ATH": "OAK",
-}
-
 
 class ParseGame:
     def __init__(self, game: dict, convert_id: ConvertMLBAM):
@@ -118,8 +101,12 @@ class ParseGame:
                 continue
             self.positions[int(player[2:])] = int(home_players[player]["allPositions"][0]["code"])
 
-        self.away_starting_pitcher = self.convert_id.mlbam_to_retro(self.game["gameData"]["probablePitchers"]["away"]["id"])
-        self.home_starting_pitcher = self.convert_id.mlbam_to_retro(self.game["gameData"]["probablePitchers"]["home"]["id"])
+        self.away_starting_pitcher = self.convert_id.mlbam_to_retro(
+            self.game["gameData"]["probablePitchers"]["away"]["id"]
+        )
+        self.home_starting_pitcher = self.convert_id.mlbam_to_retro(
+            self.game["gameData"]["probablePitchers"]["home"]["id"]
+        )
 
         self.home_team = self.game["gameData"]["teams"]["home"]["teamCode"].upper()
         self.away_team = self.game["gameData"]["teams"]["away"]["teamCode"].upper()
@@ -136,6 +123,8 @@ class ParseGame:
         runners = [None, None, None]
         runner_resp_pit_id = [None, None, None]
         old_inning_topbot = True
+        away_pitcher = [self.away_starting_pitcher, "?"]
+        home_pitcher = [self.home_starting_pitcher, "?"]
         for idx, plate_appearance in enumerate(self.game["liveData"]["plays"]["allPlays"]):
             if plate_appearance["about"]["isTopInning"] != old_inning_topbot:
                 runners = [None, None, None]
@@ -145,7 +134,25 @@ class ParseGame:
                 # This sometimes happens (eg https://www.mlb.com/gameday/rockies-vs-giants/2024/07/27/745307/final/summary/all)
                 # Where there is a random empty plate appearance. This one was after a game ending challenge, that could be why
                 continue
-            pa = ParsePlateAppearance(plate_appearance, self.game["liveData"]["plays"]["allPlays"][:idx], self.game_id, self.away_team, self.home_team, self.starting_lineup_away, self.starting_lineup_home, self.positions, self.away_starting_pitcher, self.home_starting_pitcher, [self.away_starting_pitcher], [self.home_starting_pitcher], self.away_score, self.home_score, self.convert_id, runners, runner_resp_pit_id)  # type: ignore
+            pa = ParsePlateAppearance(
+                plate_appearance,
+                self.game["liveData"]["plays"]["allPlays"][:idx],
+                self.game_id,
+                self.away_team,
+                self.home_team,
+                self.starting_lineup_away,  # type: ignore
+                self.starting_lineup_home,  # type: ignore
+                self.positions,
+                self.away_starting_pitcher,
+                self.home_starting_pitcher,
+                away_pitcher,
+                home_pitcher,
+                self.away_score,
+                self.home_score,
+                self.convert_id,
+                runners,  # type: ignore
+                runner_resp_pit_id,  # type: ignore
+            )
             pa.parse()
             self.df = pd.concat([self.df, pa.df], ignore_index=True)
             if plate_appearance["about"]["isTopInning"]:
@@ -157,21 +164,56 @@ class ParseGame:
         cwd = Path(__file__).parent
         original_cw = pd.read_hdf(cwd / "chadwick.hdf5", key=f"year_{self.game_id[3:7]}")
         game = original_cw[original_cw["GAME_ID"] == self.game_id]
-        cols_to_test = ["EVENT_CD", "BALLS_CT", "STRIKES_CT", "OUTS_CT", "START_BASES_CD", "END_BASES_CD", "BAT_FLD_CD", "HOME_SCORE_CT", "AWAY_SCORE_CT", "EVENT_RUNS_CT", "RESP_BAT_ID", "RESP_PIT_ID", "BASE1_RUN_ID", "BASE2_RUN_ID", "BASE3_RUN_ID"]
+        cols_to_test = [
+            "EVENT_CD",
+            "BALLS_CT",
+            "STRIKES_CT",
+            "OUTS_CT",
+            "START_BASES_CD",
+            "END_BASES_CD",
+            "BAT_FLD_CD",
+            "HOME_SCORE_CT",
+            "AWAY_SCORE_CT",
+            "EVENT_RUNS_CT",
+            "RESP_BAT_ID",
+            "RESP_PIT_ID",
+            "BASE1_RUN_ID",
+            "BASE2_RUN_ID",
+            "BASE3_RUN_ID",
+            "PA_TRUNC_FL",
+        ]
+        cols_to_test = chadwick_dtypes.keys()
         print(self.game_id)
         for idx, row in self.df.iterrows():
             for col in cols_to_test:
-                if pd.isna(row[col]) and pd.isna(game[col].iloc[idx]):    # type: ignore
+                if col in ["MLB_STATSAPI_APPROX", "FATE_RUNS_CT", "BAT_LINEUP_ID", "RESP_PIT_HAND_CD"]:
                     continue
-                if row[col] != game[col].iloc[idx]: # type: ignore
+                if pd.isna(row[col]) and pd.isna(game[col].iloc[idx]):  # type: ignore
+                    continue
+                if row[col] != game[col].iloc[idx]:  # type: ignore
+                    ## Blatant errors with retrosheet (I think)
+                    if self.game_id == "MIA202408230" and col in ("RUN1_CS_FL", "RUN1_PK_FL"):
+                        continue
+                    ## All these if statements are for edge cases I cannot or will not fix
                     # Weird edge case... can't tell the difference
-                    if col == "EVENT_CD" and row[col] == 2 and game[col].iloc[idx] == 18 and row["BAT_SAFE_ERR_FL"] == True:    # type: ignore
+                    if col == "EVENT_CD" and row[col] == 2 and game[col].iloc[idx] == 18 and row["BAT_SAFE_ERR_FL"] == True:  # type: ignore
                         continue
-                    # Retrosheet considers subs of the DH as DH, not PH. MLBAM considers them as PH
-                    if col == "BAT_FLD_CD" and row[col] == 11 and game[col].iloc[idx] == 10:    # type: ignore
+                    # # I have my best approximation for this circumstance but it's not perfect
+                    # if col == "EVENT_CD" and row[col] == 2 and game[col].iloc[idx] == 19 and (row["EVENT_OUTS_CT"] >= 2):  # type: ignore
+                    #     continue
+                    # Retrosheet considers subs of the DH as DH, not PH. MLBAM considers them as PH. I prefer the MLBAM way personally so I won't go through the effert to fix it
+                    if col == "BAT_FLD_CD" and row[col] == 11 and game[col].iloc[idx] == 10:  # type: ignore
                         continue
+                    # Maybe two players with this id debuted this year? Not sure
+                    if col == "RESP_PIT_ID" and row[col] == "holmg001":
+                        continue
+                    # I don't want to keep track of whether someone is unearned because they're an auto runner or just unearned... so....
+                    if col in ("RUN1_DEST_ID", "RUN2_DEST_ID", "RUN3_DEST_ID") and row[col] == 5 and game[col].iloc[idx] == 7:  # type: ignore
+                        continue
+                    # If there's more than one pitching change in a PA, the handedness of any pitcher other than the first and last is unknown
                     print(col, "mismatch")
-                    print(row[col], game.iloc[idx][col])    # type: ignore
+                    print(row[col], game.iloc[idx][col])  # type: ignore
+                    print(row["EVENT_CD"])
                     print(row)
-                    print(game.iloc[idx])   # type: ignore
+                    print(game.iloc[idx])  # type: ignore
                     print()

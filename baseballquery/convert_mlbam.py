@@ -4,8 +4,8 @@ import unicodedata
 
 
 def strip_accents(s):
-   return ''.join(c for c in unicodedata.normalize('NFD', s)
-                  if unicodedata.category(c) != 'Mn')
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
+
 
 class ConvertMLBAM:
     def __init__(self):
@@ -23,7 +23,7 @@ class ConvertMLBAM:
         if pd.isna(pid):
             # Player hasn't player in any retrosheet files yet, so reconstruct their likely retrosheet id
             last_name = self.player_lookup.loc[key, "name_last"]
-            last_name_retro = strip_accents(last_name).replace(" ", "").ljust(4, "-")[:4].lower() # type: ignore
+            last_name_retro = strip_accents(last_name).replace(" ", "").ljust(4, "-")[:4].lower()  # type: ignore
             first_name_retro = strip_accents(self.player_lookup.loc[key, "name_first"]).ljust(1, "-")[0].lower()
             retro_num = 1
             retro_id = f"{last_name_retro}{first_name_retro}{retro_num:03d}"
