@@ -31,7 +31,7 @@ def download_games():
         "https://www.retrosheet.org/events/2010seve.zip",
         "https://www.retrosheet.org/events/2020seve.zip",
     ]
-    for url in tqdm.tqdm(decade_zips, desc=" Retrosheet files downloading"):
+    for url in tqdm.tqdm(decade_zips, desc=" Retrosheet files downloading", position=1, leave=False):
         request = requests.get(url)
         zip = zipfile.ZipFile(BytesIO(request.content))
         zip.extractall(download_dir)

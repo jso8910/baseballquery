@@ -1,137 +1,11 @@
 import pandas as pd
-from convert_mlbam import ConvertMLBAM
+from .convert_mlbam import ConvertMLBAM
 from copy import deepcopy
 import json
 from pathlib import Path
 import requests
-
-chadwick_dtypes = {
-    "GAME_ID": "object",
-    "AWAY_TEAM_ID": "object",
-    "INN_CT": "Int64",
-    "OUTS_CT": "Int64",
-    "BALLS_CT": "Int64",
-    "STRIKES_CT": "Int64",
-    "AWAY_SCORE_CT": "Int64",
-    "HOME_SCORE_CT": "Int64",
-    "RESP_BAT_ID": "object",
-    "RESP_BAT_HAND_CD": "object",
-    "RESP_PIT_ID": "object",
-    "RESP_PIT_HAND_CD": "object",
-    "BASE1_RUN_ID": "object",
-    "BASE2_RUN_ID": "object",
-    "BASE3_RUN_ID": "object",
-    "BAT_FLD_CD": "Int64",
-    "BAT_LINEUP_ID": "Int64",
-    "EVENT_CD": "Int64",
-    "AB_FL": "bool",
-    "H_CD": "Int64",
-    "SH_FL": "bool",
-    "SF_FL": "bool",
-    "EVENT_OUTS_CT": "Int64",
-    "DP_FL": "bool",
-    "TP_FL": "bool",
-    "RBI_CT": "Int64",
-    "WP_FL": "bool",
-    "PB_FL": "bool",
-    "BATTEDBALL_CD": "object",
-    "BAT_DEST_ID": "Int64",
-    "RUN1_DEST_ID": "Int64",
-    "RUN2_DEST_ID": "Int64",
-    "RUN3_DEST_ID": "Int64",
-    "RUN1_SB_FL": "bool",
-    "RUN2_SB_FL": "bool",
-    "RUN3_SB_FL": "bool",
-    "RUN1_CS_FL": "bool",
-    "RUN2_CS_FL": "bool",
-    "RUN3_CS_FL": "bool",
-    "RUN1_PK_FL": "bool",
-    "RUN2_PK_FL": "bool",
-    "RUN3_PK_FL": "bool",
-    "RUN1_RESP_PIT_ID": "object",
-    "RUN2_RESP_PIT_ID": "object",
-    "RUN3_RESP_PIT_ID": "object",
-    "HOME_TEAM_ID": "object",
-    "BAT_TEAM_ID": "object",
-    "FLD_TEAM_ID": "object",
-    "PA_TRUNC_FL": "bool",
-    "START_BASES_CD": "Int64",
-    "END_BASES_CD": "Int64",
-    "RESP_PIT_START_FL": "bool",
-    "PA_BALL_CT": "Int64",
-    "PA_OTHER_BALL_CT": "Int64",
-    "PA_STRIKE_CT": "Int64",
-    "PA_OTHER_STRIKE_CT": "Int64",
-    "EVENT_RUNS_CT": "Int64",
-    "BAT_SAFE_ERR_FL": "bool",
-    "FATE_RUNS_CT": "Int64",
-    "RESP_BAT_START_FL": "bool",
-    "MLB_STATSAPI_APPROX": "bool",
-}
-
-chadwick_defaults = {
-    "GAME_ID": None,
-    "AWAY_TEAM_ID": None,
-    "INN_CT": None,
-    "OUTS_CT": None,
-    "BALLS_CT": None,
-    "STRIKES_CT": None,
-    "AWAY_SCORE_CT": None,
-    "HOME_SCORE_CT": None,
-    "RESP_BAT_ID": None,
-    "RESP_BAT_HAND_CD": None,
-    "RESP_PIT_ID": None,
-    "RESP_PIT_HAND_CD": None,
-    "BASE1_RUN_ID": pd.NA,
-    "BASE2_RUN_ID": pd.NA,
-    "BASE3_RUN_ID": pd.NA,
-    "BAT_FLD_CD": None,
-    "BAT_LINEUP_ID": None,
-    "EVENT_CD": None,
-    "AB_FL": False,
-    "H_CD": 0,
-    "SH_FL": False,
-    "SF_FL": False,
-    "EVENT_OUTS_CT": 0,
-    "DP_FL": False,
-    "TP_FL": False,
-    "RBI_CT": 0,
-    "WP_FL": False,
-    "PB_FL": False,
-    "BATTEDBALL_CD": None,
-    "BAT_DEST_ID": 0,
-    "RUN1_DEST_ID": 0,
-    "RUN2_DEST_ID": 0,
-    "RUN3_DEST_ID": 0,
-    "RUN1_SB_FL": False,
-    "RUN2_SB_FL": False,
-    "RUN3_SB_FL": False,
-    "RUN1_CS_FL": False,
-    "RUN2_CS_FL": False,
-    "RUN3_CS_FL": False,
-    "RUN1_PK_FL": False,
-    "RUN2_PK_FL": False,
-    "RUN3_PK_FL": False,
-    "RUN1_RESP_PIT_ID": pd.NA,
-    "RUN2_RESP_PIT_ID": pd.NA,
-    "RUN3_RESP_PIT_ID": pd.NA,
-    "HOME_TEAM_ID": None,
-    "BAT_TEAM_ID": None,
-    "FLD_TEAM_ID": None,
-    "PA_TRUNC_FL": False,
-    "START_BASES_CD": 0,
-    "END_BASES_CD": 0,
-    "RESP_PIT_START_FL": False,
-    "PA_BALL_CT": 0,
-    "PA_OTHER_BALL_CT": 0,
-    "PA_STRIKE_CT": 0,
-    "PA_OTHER_STRIKE_CT": 0,
-    "EVENT_RUNS_CT": 0,
-    "BAT_SAFE_ERR_FL": False,
-    "FATE_RUNS_CT": 0,
-    "RESP_BAT_START_FL": False,
-    "MLB_STATSAPI_APPROX": True,
-}
+from collections import defaultdict
+from .chadwick_cols import chadwick_dtypes, chadwick_defaults
 
 
 class ParsePlateAppearance:
@@ -145,6 +19,7 @@ class ParsePlateAppearance:
         starting_lineup_away: dict[int, str],
         starting_lineup_home: dict[int, str],
         positions: dict[int, int],
+        player_lineup_spots: dict[str, int],
         away_starting_pitcher: str,
         home_starting_pitcher: str,
         away_pitcher: list[str],
@@ -170,6 +45,7 @@ class ParsePlateAppearance:
         self.away_score = away_score
         self.home_score = home_score
         self.positions = positions
+        self.player_lineup_spots = player_lineup_spots
         self.away_starting_pitcher = away_starting_pitcher
         self.home_starting_pitcher = home_starting_pitcher
         self.convert_id = convert_id
@@ -199,7 +75,7 @@ class ParsePlateAppearance:
             "home_run": 23,
             # 'double_play': 11,             # NOTE: Need special case for this. Pretty sure it's always in play, fielded, out. Seems to be a mix of fielder's choice double play and line into double play and fly into double play
             "field_error": 2,
-            "error": 18,
+            "error": 12,
             "field_out": 2,
             "fielders_choice": 19,
             "fielders_choice_out": 19,
@@ -302,6 +178,7 @@ class ParsePlateAppearance:
                 self.starting_lineup_away,
                 self.starting_lineup_home,
                 self.positions,
+                self.player_lineup_spots,
                 self.away_starting_pitcher,
                 self.home_starting_pitcher,
                 self.away_pitcher,
@@ -330,6 +207,9 @@ class ParsePlateAppearance:
         # Save resp_pitchers
         original_resp_pitchers = self.resp_pitchers.copy()
 
+        # Save runners
+        original_runners_list = self.runners.copy()
+
         # Initialize RUNx_DEST_ID
         for idx, runner in enumerate(self.runners):
             if runner is not None:
@@ -351,36 +231,67 @@ class ParsePlateAppearance:
             row["BAT_TEAM_ID"] = self.home_team
             row["FLD_TEAM_ID"] = self.away_team
         row["INN_CT"] = self.plate_appearance["about"]["inning"]
-        row["OUTS_CT"] = self.plate_appearance["playEvents"][-1]["count"]["outs"]
 
-        # The previous event thing should be the count before the event
-        if (
-            not self.plate_appearance["playEvents"][-1].get("isBaseRunningPlay", False)
-            and not self.plate_appearance["playEvents"][-1]["type"] == "pickoff"
-        ):
-            if len(self.plate_appearance["playEvents"]) > 1:
-                row["BALLS_CT"] = self.plate_appearance["playEvents"][-2]["count"]["balls"]
-                row["STRIKES_CT"] = self.plate_appearance["playEvents"][-2]["count"]["strikes"]
+        # Handle outs, balls, strikes
+        pitches = [p for p in self.plate_appearance["pitchIndex"] if p < len(self.plate_appearance["playEvents"]) and self.plate_appearance["playEvents"][p]["type"] not in ("pickoff", "stepoff")]
+        # Exclude the most recent pitch if it has runner going UNLESS it's a foul ball
+        pitches_no_runner = pitches.copy()
+        if self.plate_appearance["playEvents"][-1]["details"]["eventType"] not in ("wild_pitch", "passed_ball", "foul_error"):
+            if len(pitches) != 0 and self.plate_appearance["playEvents"][pitches_no_runner[-1]]["details"].get("runnerGoing", False) and self.plate_appearance["playEvents"][pitches_no_runner[-1]]["details"]["code"] != "F":
+                pitches_no_runner.pop(-1)
+            # Sometimes, there is a caught stealing where the runner wasn't "going" before the pitch
+            elif len(pitches) != 0 and self.plate_appearance["playEvents"][-1]["details"]["eventType"].startswith("caught_stealing") and not self.plate_appearance["playEvents"][pitches_no_runner[-1]]["details"].get("runnerGoing", False):
+                pitches_no_runner.pop(-1)
+        if len(pitches) == 0:
+            row["OUTS_CT"] = self.plate_appearance["playEvents"][0]["count"]["outs"]
+        else:
+            row["OUTS_CT"] = self.plate_appearance["playEvents"][pitches[-1]]["count"]["outs"]
+
+        if len(pitches) > 1 and not self.plate_appearance["playEvents"][-1].get("isBaseRunningPlay", False) and self.plate_appearance["playEvents"][-1]["type"] != "pickoff" and not self.plate_appearance["playEvents"][-1]["details"]["eventType"].startswith("pickoff"):
+            row["BALLS_CT"] = self.plate_appearance["playEvents"][pitches[-2]]["count"]["balls"]
+            row["STRIKES_CT"] = self.plate_appearance["playEvents"][pitches[-2]]["count"]["strikes"]
+        elif self.plate_appearance["playEvents"][-1]["type"] == "pickoff" or self.plate_appearance["playEvents"][-1]["details"]["eventType"].startswith("pickoff"):
+            # Special case for POCS where the pickoff is done by the pitcher throwing home on a pitch. Eg stealing home
+            if self.plate_appearance["playEvents"][-1]["details"]["eventType"].startswith("pickoff_caught_stealing") and self.plate_appearance["playEvents"][-1]["details"].get("runnerGoing", False):
+                row["BALLS_CT"] = self.plate_appearance["playEvents"][pitches[-2]]["count"]["balls"]
+                row["STRIKES_CT"] = self.plate_appearance["playEvents"][pitches[-2]]["count"]["strikes"]
+            # If this is a catcher pickoff after eg a strikeout
+            elif self.plate_appearance["playEvents"][-1]["details"].get("fromCatcher", False) and not self.plate_appearance["playEvents"][-1]["details"]["eventType"].startswith("pickoff"):
+                if len(pitches) > 1:
+                    row["BALLS_CT"] = self.plate_appearance["playEvents"][pitches[-2]]["count"]["balls"]
+                    row["STRIKES_CT"] = self.plate_appearance["playEvents"][pitches[-2]]["count"]["strikes"]
+                else:
+                    row["BALLS_CT"] = 0
+                    row["STRIKES_CT"] = 0
+            elif len(pitches) > 0:
+                row["BALLS_CT"] = self.plate_appearance["playEvents"][pitches[-1]]["count"]["balls"]
+                row["STRIKES_CT"] = self.plate_appearance["playEvents"][pitches[-1]]["count"]["strikes"]
+            else:
+                row["BALLS_CT"] = 0
+                row["STRIKES_CT"] = 0
+        elif self.plate_appearance["playEvents"][-1].get("isBaseRunningPlay", False):
+            # Distance the correct pitch to get the count from is from the end
+            dist_from_last = 1
+            if self.plate_appearance["playEvents"][-1]["details"]["eventType"] in ("wild_pitch", "passed_ball", "foul_error"):
+                dist_from_last = 2
+            # This indicates a catcher pickoff likely so dist_from_last is 2
+            if self.plate_appearance["playEvents"][-1]["details"]["eventType"] == "other_out" and not self.plate_appearance["playEvents"][pitches[-1]]["details"].get("runnerGoing", False):
+                dist_from_last = 2
+            # Error = advance on the play, so we need to go back 2
+            if self.plate_appearance["playEvents"][-1]["details"]["eventType"] == "error":
+                dist_from_last = 2
+            if self.plate_appearance["playEvents"][-1]["details"]["eventType"].startswith("stolen_base") and self.plate_appearance["playEvents"][-2]["type"] == "pickoff" and self.plate_appearance["playEvents"][-2]["details"]["fromCatcher"]:
+                row["BALLS_CT"] = self.plate_appearance["playEvents"][pitches[-1]]["count"]["balls"]
+                row["STRIKES_CT"] = self.plate_appearance["playEvents"][pitches[-1]]["count"]["strikes"]
+            elif len(pitches_no_runner) >= dist_from_last:
+                row["BALLS_CT"] = self.plate_appearance["playEvents"][pitches_no_runner[-dist_from_last]]["count"]["balls"]
+                row["STRIKES_CT"] = self.plate_appearance["playEvents"][pitches_no_runner[-dist_from_last]]["count"]["strikes"]
             else:
                 row["BALLS_CT"] = 0
                 row["STRIKES_CT"] = 0
         else:
-            if len(self.plate_appearance["playEvents"]) > 1:
-                row["OUTS_CT"] = self.plate_appearance["playEvents"][-2]["count"]["outs"]
-            else:
-                row["OUTS_CT"] = self.plate_appearance["playEvents"][-1]["count"]["outs"]
-            # If it's a baserunning play (or pickoff from catcher), the last one will be the baserunning event,
-            # the second to last will be the pitch, and the third to last will be the previous count
-            # If it's a pickoff from the pitcher, the last will still be the previous count I think
-            if self.plate_appearance["playEvents"][-1]["type"] == "pickoff":
-                row["BALLS_CT"] = self.plate_appearance["playEvents"][-1]["count"]["balls"]
-                row["STRIKES_CT"] = self.plate_appearance["playEvents"][-1]["count"]["strikes"]
-            elif len(self.plate_appearance["playEvents"]) > 2:
-                row["BALLS_CT"] = self.plate_appearance["playEvents"][-3]["count"]["balls"]
-                row["STRIKES_CT"] = self.plate_appearance["playEvents"][-3]["count"]["strikes"]
-            else:
-                row["BALLS_CT"] = 0
-                row["STRIKES_CT"] = 0
+            row["BALLS_CT"] = 0
+            row["STRIKES_CT"] = 0
 
         # Get the batter and pitcher
         row["RESP_BAT_ID"] = self.convert_id.mlbam_to_retro(self.plate_appearance["matchup"]["batter"]["id"])
@@ -389,6 +300,8 @@ class ParsePlateAppearance:
         row["RESP_PIT_HAND_CD"] = self.plate_appearance["matchup"]["pitchHand"]["code"]
 
         resp_pit_is_current_pitcher = True
+        ghost_runner = None
+        ghost_runner_original_base = -1
         # Process substitutions and runner placement in extra innings
         for event_idx in self.plate_appearance["actionIndex"]:
             if event_idx >= len(self.plate_appearance["playEvents"]):
@@ -397,6 +310,8 @@ class ParsePlateAppearance:
             if event["details"]["eventType"] == "runner_placed" and not self.ghost_runner_added:
                 base = event["base"]
                 player = self.convert_id.mlbam_to_retro(event["player"]["id"])
+                ghost_runner = player
+                ghost_runner_original_base = base
                 if player not in self.runners:  # If they advanced by eg a wild pitch, they will have already been added
                     self.runners[base - 1] = player
                     self.resp_pitchers[base - 1] = row["RESP_PIT_ID"]
@@ -436,6 +351,19 @@ class ParsePlateAppearance:
                 # Otherwise, the play should actually already have the correct ID
             elif event["position"]["abbreviation"] == "P":
                 new_code = self.convert_id.mlbam_to_retro(event["player"]["id"])
+
+                # If there is a ghost runner, we need to update the ghost runner's pitcher to the first pitcher in the at bat (not the substituted one)
+                if ghost_runner is not None:
+                    self.resp_pitchers[self.runners.index(ghost_runner)] = (
+                        self.home_pitcher[0] if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher[0]
+                    )
+                    row[f"RUN{self.runners.index(ghost_runner) + 1}_RESP_PIT_ID"] = (
+                        self.home_pitcher[0] if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher[0]
+                    )
+                    original_resp_pitchers[ghost_runner_original_base - 1] = (
+                        self.home_pitcher[0] if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher[0]
+                    )
+                    ghost_runner = None
                 count = (event["count"]["balls"], event["count"]["strikes"])
                 # Rule 10.17(g)(1) (ok it might not actually be this number, but you get the point)
                 not_charged_to_reliever = count in ((3, 0), (3, 1), (3, 2), (2, 1), (2, 0))
@@ -447,10 +375,13 @@ class ParsePlateAppearance:
                     row["RESP_PIT_HAND_CD"] = (
                         self.home_pitcher[1] if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher[1]
                     )
-                # If there were any previous plays, we need to change RESP_PIT_ID for the previous baserunning plays
+                # If there were any previous plays, we need to change RESP_PIT_ID and RESP_PIT_START_FL for the previous baserunning plays
                 for i, _ in self.df.iterrows():
-                    self.df.loc[i, "RESP_PIT_ID"] = self.home_pitcher[0] if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher[0]  # type: ignore
-                # Otherwise, the play should actually already have the correct ID
+                    pitcher = self.home_pitcher if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher
+                    self.df.loc[i, "RESP_PIT_ID"] = pitcher[0]  # type: ignore
+                    self.df.loc[i, "RESP_PIT_HAND_CD"] = pitcher[1]  # type: ignore
+                    if pitcher[0] == self.away_starting_pitcher or pitcher[0] == self.home_starting_pitcher:
+                        self.df.loc[i, "RESP_PIT_START_FL"] = True  # type: ignore
                 if self.plate_appearance["about"]["isTopInning"]:
                     self.home_pitcher[0] = new_code
                     self.home_pitcher[1] = self.plate_appearance["matchup"]["pitchHand"]["code"]
@@ -483,12 +414,11 @@ class ParsePlateAppearance:
             self.positions[self.plate_appearance["matchup"]["batter"]["id"]] = 0
 
         # Check whether batter and hitter are starter
-        if (
-            row["RESP_BAT_ID"] in self.starting_lineup_away.values()
-            or row["RESP_BAT_ID"] in self.starting_lineup_home.values()
-        ):
+        if row["RESP_BAT_ID"] in list(self.starting_lineup_away.values()) + [self.away_starting_pitcher] + list(
+            self.starting_lineup_home.values()
+        ) + [self.home_starting_pitcher]:
             row["RESP_BAT_START_FL"] = True
-        if row["RESP_PIT_ID"] == self.away_starting_pitcher or row["RESP_PIT_ID"] in self.home_starting_pitcher:
+        if row["RESP_PIT_ID"] == self.away_starting_pitcher or row["RESP_PIT_ID"] == self.home_starting_pitcher:
             row["RESP_PIT_START_FL"] = True
 
         # Update BASE_RUN_IDs for runners
@@ -502,26 +432,48 @@ class ParsePlateAppearance:
 
         # We don't want any baserunning events from the same origin and different destinations on the same play
         origin_bases = set()
+        origin_base_runner_events = defaultdict(list)
         original_runners = deepcopy(self.plate_appearance["runners"])
+        # The latest one is the longest advance
         for idx in reversed(range(len(self.plate_appearance["runners"]))):
             if (
                 self.plate_appearance["runners"][idx]["movement"]["originBase"],
                 self.plate_appearance["runners"][idx]["details"]["playIndex"],
             ) in origin_bases:
-                self.plate_appearance["runners"].pop(idx)
+                origin_base_runner_events[
+                    (
+                        self.plate_appearance["runners"][idx]["movement"]["originBase"],
+                        self.plate_appearance["runners"][idx]["details"]["playIndex"],
+                    )
+                ].append(self.plate_appearance["runners"].pop(idx))
             origin_bases.add(
                 (
                     self.plate_appearance["runners"][idx]["movement"]["originBase"],
                     self.plate_appearance["runners"][idx]["details"]["playIndex"],
                 )
             )
+            origin_base_runner_events[
+                (
+                    self.plate_appearance["runners"][idx]["movement"]["originBase"],
+                    self.plate_appearance["runners"][idx]["details"]["playIndex"],
+                )
+            ].append(self.plate_appearance["runners"][idx])
 
         # Calculate runs scored on play and other baserunning events
         runs_scored = 0
         rbis = 0
+        out_runner_resp_pit = None
+        out_runner_base = -1
+        special_pickoff = False
         for runner in self.plate_appearance["runners"]:
             start_base = runner["movement"]["originBase"]
             end_base = runner["movement"]["end"]
+
+            # Sometimes start_base == end_base and this completely breaks the parser
+            # (normally, it's to add some throwing error that didn't result in an advance, I think resulting in a runner safely returning)
+            if start_base == end_base:
+                continue
+
             try:
                 end_base = int(end_base[0])
             except:
@@ -543,23 +495,50 @@ class ParsePlateAppearance:
                 row[f"RUN{start_base}_SB_FL"] = False
                 row[f"RUN{start_base}_CS_FL"] = False
                 row[f"RUN{start_base}_PK_FL"] = False
-                if runner["details"]["eventType"].startswith("caught_stealing") and runner["movement"]["isOut"]:
-                    row[f"RUN{start_base}_CS_FL"] = True
-                elif runner["details"]["eventType"].startswith("pickoff_caught_stealing"):
-                    row[f"RUN{start_base}_CS_FL"] = True
-                    row[f"RUN{start_base}_PK_FL"] = True
-                elif runner["details"]["eventType"].startswith("pickoff"):
-                    row[f"RUN{start_base}_PK_FL"] = True
-                elif runner["details"]["eventType"].startswith("stolen_base"):
-                    row[f"RUN{start_base}_SB_FL"] = True
-                elif runner["details"]["eventType"] == "wild_pitch":
-                    row["WP_FL"] = True
-                elif runner["details"]["eventType"] == "passed_ball":
-                    row["PB_FL"] = True
+                # Sometimes the longest advance doesn't tell us whether there was a SB, CS, etc (eg if there's an SB then error)
+                for e in origin_base_runner_events[(runner["movement"]["originBase"], runner["details"]["playIndex"])]:
+                    if e["details"]["eventType"].startswith("caught_stealing") and not e["details"][
+                        "movementReason"
+                    ].startswith("r_adv"):
+                        row[f"RUN{start_base}_CS_FL"] = True
+                        if self.plate_appearance["playEvents"][-1]["details"]["eventType"] == "other_out":
+                            self.plate_appearance["playEvents"][-1]["details"]["eventType"] = f"caught_stealing_{start_base + 1}b"
+                    elif e["details"]["eventType"].startswith("pickoff_caught_stealing") and not e["details"][
+                        "movementReason"
+                    ].startswith("r_adv"):
+                        row[f"RUN{start_base}_CS_FL"] = True
+                        row[f"RUN{start_base}_PK_FL"] = True
+                    elif (
+                        e["details"]["eventType"].startswith("pickoff")
+                        and e["details"]["movementReason"] != "r_adv_play"
+                    ):
+                        row[f"RUN{start_base}_PK_FL"] = True
+                    elif e["details"]["eventType"].startswith("stolen_base") and not e["details"]["movementReason"].startswith("r_adv"):
+                        row[f"RUN{start_base}_SB_FL"] = True
+                    elif e["details"]["eventType"] == "wild_pitch":
+                        row["WP_FL"] = True
+                    elif e["details"]["eventType"] == "passed_ball":
+                        row["PB_FL"] = True
+                    elif (
+                        e["details"]["movementReason"] == "r_out_returning" and e["details"]["eventType"] == "other_out"
+                    ):
+                        # Sometimes, the second to last event has the pickoff thing...
+                        if (
+                            e["details"]["playIndex"] > 0
+                            and self.plate_appearance["playEvents"][e["details"]["playIndex"] - 1]["type"] == "pickoff"
+                        ):
+                            special_pickoff = True
+                            row[f"RUN{start_base}_PK_FL"] = True
             elif start_base == None:
                 row["BAT_DEST_ID"] = end_base
-                if runner["details"]["eventType"] in ("field_error"):
-                    row["BAT_SAFE_ERR_FL"] = True
+                # Mostly for passed ball/wild pitch dropped third strike
+                for e in origin_base_runner_events[(runner["movement"]["originBase"], runner["details"]["playIndex"])]:
+                    if e["details"]["eventType"] == "wild_pitch":
+                        row["WP_FL"] = True
+                    elif e["details"]["eventType"] == "passed_ball":
+                        row["PB_FL"] = True
+                    if e["details"]["eventType"] == "field_error":
+                        row["BAT_SAFE_ERR_FL"] = True
             else:
                 print(self.plate_appearance)
                 print(start_base)
@@ -590,6 +569,13 @@ class ParsePlateAppearance:
                     self.runners[idx] = None
             else:
                 pid = self.convert_id.mlbam_to_retro(runner["details"]["runner"]["id"])
+                if (
+                    pid in original_runners_list
+                    and (start_base == None and out_runner_base == -1)
+                    or (start_base is not None and start_base > out_runner_base)
+                ):
+                    out_runner_resp_pit = original_resp_pitchers[start_base - 1]
+                    out_runner_base = start_base
                 if pid in self.runners and start_base != None:
                     self.runners[start_base - 1] = None
                     self.resp_pitchers[start_base - 1] = None
@@ -625,34 +611,76 @@ class ParsePlateAppearance:
                 event_code = 2  # out
             # If the batter made it to any base (ie a safe advance without an out), it's a fielder's choice
             elif any(r["movement"]["originBase"] == None and not r["movement"]["isOut"] for r in original_runners):
-                event_code = 19  # fielder's choice
+                r = next(
+                    r for r in original_runners if r["movement"]["originBase"] == None and not r["movement"]["isOut"]
+                )
+                if any("error" in c["credit"] for c in r["credits"]):
+                    event_code = 2
+                    row["BAT_SAFE_ERR_FL"] = True
+                else:
+                    event_code = 19  # fielder's choice
             else:
                 event_code = 18  # error
+            if event_type == "sac_hit_double_play":
+                row["DP_FL"] = True
         elif event_type in ("sac_fly", "sac_fly_double_play"):
             row["SF_FL"] = True
             if self.plate_appearance["playEvents"][-1]["details"]["isOut"]:
                 event_code = 2  # out
             elif any(r["movement"]["originBase"] == None and not r["movement"]["isOut"] for r in original_runners):
-                event_code = 19  # fielder's choice
+                r = next(
+                    r for r in original_runners if r["movement"]["originBase"] == None and not r["movement"]["isOut"]
+                )
+                if any("error" in c["credit"] for c in r["credits"]):
+                    event_code = 18
+                    row["BAT_SAFE_ERR_FL"] = True
+                else:
+                    event_code = 19  # fielder's choice
             else:
                 event_code = 18  # error
+            if event_type == "sac_fly_double_play":
+                row["DP_FL"] = True
         elif event_type == "double_play" or event_type == "triple_play":
-            if any(r["movement"]["originBase"] == None and not r["movement"]["isOut"] for r in original_runners):
-                event_code = 19  # fielder's choice
-            else:
-                event_code = 2
+            # It seems that retrosheet doesn't add the fielder's choice flag to double plays :((
+            event_code = 2
         else:
             # Get the event code
             event_code = event_type_to_cwevent.get(event_type, 100)
+            # Sometimes the event code is 2 but the batter still reaches on an error
+            if event_code == 2:
+                try:
+                    r = next(
+                        r
+                        for r in original_runners
+                        if r["movement"]["originBase"] == None and not r["movement"]["isOut"]
+                    )
+                    if any("error" in c["credit"] for c in r["credits"]):
+                        row["BAT_SAFE_ERR_FL"] = True
+                except StopIteration:
+                    pass
             if event_code == 100:
                 print(event_type)
                 raise ValueError("Unknown event type")
-        row["EVENT_CD"] = event_code
 
-        # Handle pitcher responsibility on a fielder's choice
-        if event_code == 19:
-            # If the batter made it to first on a fielder's choice, the pitcher responsible for the runner out on the fielder's choice is now responsible
-            self.resp_pitchers[row["BAT_DEST_ID"] - 1] = next(p for p in original_resp_pitchers if p)  # type: ignore
+        # Special case where other_out is a pickoff
+        if event_type == "other_out" and special_pickoff:
+            event_code = 8
+
+        # Foul error
+        if event_code == 13:
+            row["BATTEDBALL_CD"] = "F"
+            if "pop" in self.plate_appearance["playEvents"][-1]["details"]["description"].lower():
+                row["BATTEDBALL_CD"] = "P"
+
+        # This happens with interference errors on a pickoff! EVENT_CD should be 8 and PK_FL should be set!
+        if (
+            event_type == "error"
+            and len(self.plate_appearance["playEvents"]) > 1
+            and self.plate_appearance["playEvents"][-2]["type"] == "pickoff"
+        ):
+            event_code = 8
+            row[f"RUN{self.plate_appearance["playEvents"][-2]["details"]["code"]}_PK_FL"] = True
+        row["EVENT_CD"] = event_code
 
         # Check if the event is an at bat (PA but not catcher's interference or sacrifice or walk or HBP)
         if (
@@ -663,9 +691,11 @@ class ParsePlateAppearance:
         ):
             row["AB_FL"] = True
 
-        # If this is the top level PA (ie not a sub PA), and the event is not a plate appearance, set PA_TRUNC_FL
+        # If this is the top level PA (ie not a sub PA), and the event is not a plate appearance, set PA_TRUNC_FL for all events
         if self.top_level_pa and not eventTypes[event_type]["plateAppearance"]:
             row["PA_TRUNC_FL"] = True
+            for i, _ in self.df.iterrows():
+                self.df.loc[i, "PA_TRUNC_FL"] = True  # type: ignore
 
         # Set H_CD
         if event_code in [20, 21, 22, 23]:
@@ -674,17 +704,18 @@ class ParsePlateAppearance:
             # This can be incorrectly set sometimes
             row["BAT_SAFE_ERR_FL"] = False
 
-        # Set DP_FL and TP_FL
-        if event_type.endswith("double_play"):
-            row["DP_FL"] = True
-        elif event_type.endswith("triple_play"):
-            row["TP_FL"] = True
-
         # Outs
         if self.top_level_pa:
             row["EVENT_OUTS_CT"] = self.plate_appearance["count"]["outs"] - row["OUTS_CT"]
         else:
             row["EVENT_OUTS_CT"] = self.plate_appearance["playEvents"][-1]["count"]["outs"] - row["OUTS_CT"]
+
+        # Set DP_FL and TP_FL
+        if not row["SF_FL"] and not row["SH_FL"]:
+            if row["EVENT_OUTS_CT"] == 2:
+                row["DP_FL"] = True
+            elif row["EVENT_OUTS_CT"] == 3:
+                row["TP_FL"] = True
 
         # Balls and Strikes
         row["PA_STRIKE_CT"] = 0
@@ -696,7 +727,7 @@ class ParsePlateAppearance:
                 continue
             pitch = self.plate_appearance["playEvents"][pitch_idx]
             # For some reason, auto strikes and balls don't count...
-            if pitch["details"]["code"] == "AC":
+            if pitch["details"]["code"] in ("AS", "AC", "AB"):
                 continue
             if pitch["details"].get("isStrike", False) or pitch["details"].get("isInPlay", False):
                 row["PA_STRIKE_CT"] += 1
@@ -708,8 +739,21 @@ class ParsePlateAppearance:
             elif not pitch["isPitch"] and pitch["details"].get("isStrike", False):
                 row["PA_OTHER_STRIKE_CT"] += 1
 
-        # Batted ball type
-        if self.plate_appearance["playEvents"][-1].get("hitData"):
+        # Handle pitcher responsibility on a fielder's choice (or when the batter reaches base but there's an out)
+        if event_code == 19 or row["BAT_DEST_ID"] != 0 and row["EVENT_OUTS_CT"] > 0 and event_code not in (20, 21, 22, 23):
+            # This is example 3 in rule 9.16(g). If the runner is out, the ex-pitcher is now responsible for the last runner before the out
+            # ie runners on first and second, if the runner is out advancing from first to second, the ex-pitcher is responsible for
+            # the batter now on first, not the runner on third
+            if out_runner_resp_pit:
+                for i in reversed(range(out_runner_base)):
+                    if i != 0:
+                        if row[f"RUN{i}_DEST_ID"] in [1, 2, 3] and self.resp_pitchers[row[f"RUN{i}_DEST_ID"] - 1] == row["RESP_PIT_ID"]:  # type: ignore
+                            self.resp_pitchers[row[f"RUN{i}_DEST_ID"] - 1] = out_runner_resp_pit  # type: ignore
+                            break
+                    else:
+                        self.resp_pitchers[row["BAT_DEST_ID"] - 1] = out_runner_resp_pit  # type: ignore
+        # Batted ball type. Sometimes on catcher's interference, hitData is populated despite no _real_ BIP
+        if self.plate_appearance["playEvents"][-1].get("hitData") and row["EVENT_CD"] != 17:
             batted_ball = self.plate_appearance["playEvents"][-1]["hitData"]["trajectory"]
             if batted_ball == "popup":
                 row["BATTEDBALL_CD"] = "P"
@@ -723,5 +767,8 @@ class ParsePlateAppearance:
                 row["BATTEDBALL_CD"] = "G"
             elif batted_ball == "bunt_popup":
                 row["BATTEDBALL_CD"] = "P"
+            elif batted_ball == "bunt_line_drive":
+                row["BATTEDBALL_CD"] = "L"
 
+        row["BAT_LINEUP_ID"] = self.player_lineup_spots[row["RESP_BAT_ID"]]
         self.df = pd.concat([self.df, pd.DataFrame([row])], ignore_index=True)

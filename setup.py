@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import re
+from glob import glob
 from setuptools import find_packages, setup  # type: ignore
 
 
@@ -26,7 +27,7 @@ with open("README.md") as readme_file:
 # with open('HISTORY.md') as history_file:
 #     history = history_file.read()
 
-requirements = ["requests", "tqdm", "pandas", "tables", "h5py", "dask[dataframe]", "typing-extensions", "numpy"]
+requirements = ["requests", "tqdm", "pandas", "tables", "h5py", "typing-extensions", "numpy"]
 
 test_requirements = []
 
@@ -48,7 +49,7 @@ _ = setup(
             "baseballquery/downloads",
         ]
     ),
-    data_files=[("", ["baseballquery/eventTypes.json"])],
+    data_files=[("", ["baseballquery/eventTypes.json", *glob("baseballquery/register/data/*")])],
     package_dir={
         "package": "package",
     },

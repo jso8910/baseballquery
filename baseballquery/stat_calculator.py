@@ -91,7 +91,7 @@ class BattingStatsCalculator(StatCalculator):
     ):
         """
         Args:
-            events (dd.DataFrame): A Dask DataFrame that contains the events data.
+            events (pd.DataFrame): A Pandas DataFrame that contains the events data.
             linear_weights (pd.DataFrame): A DataFrame that contains the linear weights for each event. Make sure that you have the linear weights for any year you're including in the events. If not, there will be an error.
             find (str): The split of the data. It can be "player" or "team".
             split (str): The split of the data. It can be "year", "month", "career", "day", or "game".
@@ -356,7 +356,7 @@ class PitchingStatsCalculator(StatCalculator):
     ):
         """
         Args:
-            events (dd.DataFrame): A Dask DataFrame that contains the events data.
+            events (pd.DataFrame): A Pandas DataFrame that contains the events data.
             linear_weights (pd.DataFrame): A DataFrame that contains the linear weights for each event. Any rows other than the first row are ignored, so average the linear weights if necessary.
             find (str): The split of the data. It can be "player" or "team".
             split (str): The split of the data. It can be "year", "month", "career", "day", or "game".
