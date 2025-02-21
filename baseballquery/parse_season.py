@@ -4,6 +4,7 @@ from .convert_mlbam import ConvertMLBAM
 from .chadwick_cols import chadwick_dtypes
 from .parse_game import ParseGame
 from tqdm import tqdm
+from .utils import get_year_events
 
 class ParseSeason:
     def __init__(self, year: int):
@@ -20,6 +21,12 @@ class ParseSeason:
         return schedule
 
     def parse(self):
+        try:
+            df = get_year_events(self.year)
+            if not df.empty:
+                self.df = pd.concat([self.df, df])
+        except KeyError:
+            pass
         schedule = self.get_schedule()
         games = set()
         for date in schedule["dates"]:
@@ -30,6 +37,8 @@ class ParseSeason:
                 # Only finished games
                 if not game["status"]["codedGameState"] == "F":
                     continue
+                if game["gamePk"] in self.df["mlbam_id"].values:
+                    continue
                 games.add(game["link"])
         if not games:
             return
@@ -37,5 +46,6 @@ class ParseSeason:
             game_data = requests.get(f"https://statsapi.mlb.com{game}").json()
             parse_game = ParseGame(game_data, self.convert_mlbam)
             parse_game.parse()
+            parse_game.df["mlbam_id"] = game_data["gamePk"]
             self.df = pd.concat([self.df, parse_game.df])
         return self.df

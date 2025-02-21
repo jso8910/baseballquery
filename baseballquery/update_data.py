@@ -48,7 +48,7 @@ def update_data():
         linear_weights.calc_weights(years_list=years_updated)
 
     # Check the schedule for the current year
-    if datetime.now().year > END_YEAR and f"year_{datetime.now().year}" not in years_h5:
+    if datetime.now().year > END_YEAR:
         print("Downloading data for current year (approximated; view README.md on Github for more information)")
         df = ParseSeason(datetime.now().year).parse()
         if df is None:

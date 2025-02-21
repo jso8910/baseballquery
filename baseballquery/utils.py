@@ -7,7 +7,7 @@ def get_year_events(year: int) -> pd.DataFrame:
         cwd = Path(__file__).parent
         return pd.read_hdf(cwd / "chadwick.hdf5", key=f"year_{year}")   # type: ignore
     except KeyError:
-        raise ValueError(f"Year {year} not found in data. Have you run baseballquery.update_data() to download the data?")
+        raise KeyError(f"Year {year} not found in data. Have you run baseballquery.update_data() to download the data?")
 
 def get_years() -> list[int]:
     cwd = Path(__file__).parent
