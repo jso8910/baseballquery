@@ -46,9 +46,7 @@ class StatCalculator:
             raise ValueError(f"find must be 'player' or 'team', not '{self.find}'")
         self.split = split
         if self.split not in ["year", "month", "career", "game"]:
-            raise ValueError(
-                f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'"
-            )
+            raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
 
         # Dummy self.stats DataFrame to be overwritten by the child class
         self.stats: pd.DataFrame = pd.DataFrame(columns=self.info_columns + self.basic_stat_columns + self.calculated_stat_columns)  # type: ignore
@@ -58,14 +56,10 @@ class StatCalculator:
         self.calculate_advanced_stats()
 
     def calculate_basic_stats(self) -> None:
-        raise NotImplementedError(
-            "calculate_basic_stats must be implemented in the child class."
-        )
+        raise NotImplementedError("calculate_basic_stats must be implemented in the child class.")
 
     def calculate_advanced_stats(self) -> None:
-        raise NotImplementedError(
-            "calculate_advanced_stats must be implemented in the child class."
-        )
+        raise NotImplementedError("calculate_advanced_stats must be implemented in the child class.")
 
     def create_player_row(self, player_id: str = pd.NA, team: str = pd.NA, year: int = pd.NA, month: int = pd.NA, day: int = pd.NA, game_id: str = pd.NA):  # type: ignore
         self.stats.loc[len(self.stats)] = [player_id, team, year, month, day, game_id, year, year] + [0] * len(self.stats.columns[8:])  # type: ignore
@@ -97,7 +91,7 @@ class BattingStatsCalculator(StatCalculator):
     ):
         """
         Args:
-            events (dd.DataFrame): A Dask DataFrame that contains the events data.
+            events (pd.DataFrame): A Pandas DataFrame that contains the events data.
             linear_weights (pd.DataFrame): A DataFrame that contains the linear weights for each event. Make sure that you have the linear weights for any year you're including in the events. If not, there will be an error.
             find (str): The split of the data. It can be "player" or "team".
             split (str): The split of the data. It can be "year", "month", "career", "day", or "game".
@@ -291,14 +285,11 @@ class BattingStatsCalculator(StatCalculator):
     @override
     def calculate_advanced_stats(self):
         self.stats["AVG"] = self.stats["H"] / self.stats["AB"]
-        self.stats["OBP"] = (
-            self.stats["H"] + self.stats["UBB"] + self.stats["IBB"] + self.stats["HBP"]
-        ) / (self.stats["PA"])
+        self.stats["OBP"] = (self.stats["H"] + self.stats["UBB"] + self.stats["IBB"] + self.stats["HBP"]) / (
+            self.stats["PA"]
+        )
         self.stats["SLG"] = (
-            self.stats["1B"]
-            + 2 * self.stats["2B"]
-            + 3 * self.stats["3B"]
-            + 4 * self.stats["HR"]
+            self.stats["1B"] + 2 * self.stats["2B"] + 3 * self.stats["3B"] + 4 * self.stats["HR"]
         ) / self.stats["AB"]
         self.stats["OPS"] = self.stats["OBP"] + self.stats["SLG"]
         self.stats["ISO"] = self.stats["SLG"] - self.stats["AVG"]
@@ -337,13 +328,10 @@ class BattingStatsCalculator(StatCalculator):
         league_wrc_pa = stats_with_linear_weights["lg_runs_pa_lw"]  # type: ignore
 
         self.stats["wRAA"] = (
-            (self.stats["wOBA"] - lg_woba_avg)
-            / stats_with_linear_weights["woba_scale_lw"]
+            (self.stats["wOBA"] - lg_woba_avg) / stats_with_linear_weights["woba_scale_lw"]
         ) * self.stats["PA"]
         self.stats["wRC"] = self.stats["wRAA"] + lg_runs_pa * self.stats["PA"]
-        self.stats["wRC+"] = (
-            (self.stats["wRC"] / self.stats["PA"]) / league_wrc_pa
-        ) * 100
+        self.stats["wRC+"] = ((self.stats["wRC"] / self.stats["PA"]) / league_wrc_pa) * 100
         self.stats["GB%"] = self.stats["GB"] / (
             self.stats["GB"] + self.stats["LD"] + self.stats["FB"] + self.stats["PU"]
         )
@@ -368,7 +356,7 @@ class PitchingStatsCalculator(StatCalculator):
     ):
         """
         Args:
-            events (dd.DataFrame): A Dask DataFrame that contains the events data.
+            events (pd.DataFrame): A Pandas DataFrame that contains the events data.
             linear_weights (pd.DataFrame): A DataFrame that contains the linear weights for each event. Any rows other than the first row are ignored, so average the linear weights if necessary.
             find (str): The split of the data. It can be "player" or "team".
             split (str): The split of the data. It can be "year", "month", "career", "day", or "game".
@@ -518,8 +506,8 @@ class PitchingStatsCalculator(StatCalculator):
                 if stat == "GS":
                     for game_id in group["GAME_ID"].unique():  # type: ignore
                         game = group[group["GAME_ID"] == game_id]  # type: ignore
-                        if game["PIT_START_FL"].iloc[0] == True:  # type: ignore
-                            self.stats.loc[player_row_idx, stat] += 1
+                        if game["RESP_PIT_START_FL"].iloc[0] == True:  # type: ignore
+                            self.stats.loc[player_row_idx, stat] += 1  # type: ignore
                     continue
                 if stat == "IP":
                     self.stats.loc[player_row_idx, stat] = group["EVENT_OUTS_CT"].sum() / 3  # type: ignore
@@ -636,9 +624,7 @@ class PitchingStatsCalculator(StatCalculator):
             )
             / self.stats["IP"]
         )
-        self.stats["WHIP"] = (
-            self.stats["H"] + self.stats["UBB"] + self.stats["IBB"]
-        ) / self.stats["IP"]
+        self.stats["WHIP"] = (self.stats["H"] + self.stats["UBB"] + self.stats["IBB"]) / self.stats["IP"]
 
         self.stats["ERA-"] = (self.stats["ERA"] / league_era) * 100
         self.stats["FIP-"] = (self.stats["FIP"] / league_era) * 100

@@ -2,6 +2,7 @@ import h5py  # type: ignore
 from pathlib import Path
 import pandas as pd  # type: ignore
 from .stat_calculator import BattingStatsCalculator, PitchingStatsCalculator
+from .utils import get_year_events, get_years, get_linear_weights
 
 
 class StatSplits:
@@ -9,21 +10,17 @@ class StatSplits:
         """
         Parent class. Should not be instantiated directly
         """
-        cwd = Path(__file__).parent
-        self.chadwick = cwd / "chadwick.hdf5"
-        with h5py.File(self.chadwick) as f:
-            years: list[str] = list(f.keys())
+        years = get_years()
 
-        if f"year_{start_year}" not in years:
-            raise ValueError(f"Start year {start_year} not found in database")
-        if f"year_{end_year}" not in years:
-            raise ValueError(f"End year {end_year} not found in database")
+        if start_year not in years:
+            raise ValueError(f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?")
+        if end_year not in years:
+            raise ValueError(f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()")
         events_years_list = []
         for year in range(start_year, end_year + 1):
-            events_years_list.append(pd.read_hdf(self.chadwick, f"year_{year}"))  # type: ignore
+            events_years_list.append(get_year_events(year))  # type: ignore
 
-        cwd = Path(__file__).parent
-        self.linear_weights = pd.read_csv(cwd / "linear_weights.csv")  # type: ignore
+        self.linear_weights = get_linear_weights()  # type: ignore
         self.events = pd.concat(events_years_list)  # type: ignore
         self.stats: pd.DataFrame | None = None
         self.split = "year"
