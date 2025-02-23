@@ -6,4 +6,4 @@ from .update_data import update_data
 from .utils import get_year_events, get_years, get_linear_weights
 
 
-__version__ = "0.0.3"
+__version__ = "0.1.0"
