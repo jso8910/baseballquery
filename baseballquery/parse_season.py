@@ -42,7 +42,7 @@ class ParseSeason:
                 games.add(game["link"])
         if not games:
             return
-        for game in tqdm(games, desc=" Games", position=0, leave=True):
+        for game in tqdm(games, desc="Games", position=0, leave=True):
             game_data = requests.get(f"https://statsapi.mlb.com{game}").json()
             parse_game = ParseGame(game_data, self.convert_mlbam)
             parse_game.parse()

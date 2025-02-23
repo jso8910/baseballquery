@@ -66,7 +66,10 @@ def calc_linear_weights(events: pd.DataFrame):
 
     # Calculate the final RE24 matrix
     for idx in range(len(run_exp_by_sit)):
-        run_exp_by_sit[idx][4] = run_exp_by_sit[idx][2] / run_exp_by_sit[idx][3]
+        if run_exp_by_sit[idx][3] == 0:
+            run_exp_by_sit[idx][4] = 0
+        else:
+            run_exp_by_sit[idx][4] = run_exp_by_sit[idx][2] / run_exp_by_sit[idx][3]
 
     # Total runs added through each event
     run_expectancy_total = {
@@ -259,4 +262,14 @@ def calc_weights(years_list=None):
 
     weights_pd = pd.concat(weights_pd_list, ignore_index=True)
     weights_pd.set_index("year", inplace=True)
+    if (linear_weights_dir / "linear_weights.csv").exists():
+        weights_original = pd.read_csv(linear_weights_dir / "linear_weights.csv")
+        weights_original.set_index("year", inplace=True)
+
+        for row in weights_pd.index:
+            if row in weights_original.index:
+                weights_original.drop(row, inplace=True)
+        weights_pd = pd.concat([weights_original, weights_pd])
+
+    weights_pd.sort_index(inplace=True)
     _ = weights_pd.to_csv(linear_weights_dir / f"linear_weights.csv")
