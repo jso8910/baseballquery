@@ -50,6 +50,7 @@ class StatCalculator:
 
         # Dummy self.stats DataFrame to be overwritten by the child class
         self.stats: pd.DataFrame = pd.DataFrame(columns=self.info_columns + self.basic_stat_columns + self.calculated_stat_columns)  # type: ignore
+        self.stats_l = []
 
     def calculate_all_stats(self):
         self.calculate_basic_stats()
@@ -62,23 +63,16 @@ class StatCalculator:
         raise NotImplementedError("calculate_advanced_stats must be implemented in the child class.")
 
     def create_player_row(self, player_id: str = pd.NA, team: str = pd.NA, year: int = pd.NA, month: int = pd.NA, day: int = pd.NA, game_id: str = pd.NA):  # type: ignore
-        self.stats.loc[len(self.stats)] = [player_id, team, year, month, day, game_id, year, year] + [0] * len(self.stats.columns[8:])  # type: ignore
-
-    def get_player_row(self, player_id: str = pd.NA, team: str = pd.NA, year: int = pd.NA, month: int = pd.NA, day: int = pd.NA, game_id: str = pd.NA) -> int:  # type: ignore
-
-        player_row = self.stats.index[  # type: ignore
-            ((self.stats["player_id"] == player_id) | (pd.isna(self.stats["player_id"]) & pd.isna(player_id)))  # type: ignore
-            & ((self.stats["team"] == team) | (pd.isna(self.stats["team"]) & pd.isna(team)))  # type: ignore
-            & ((self.stats["year"] == year) | (pd.isna(self.stats["year"]) & pd.isna(year)))  # type: ignore
-            & ((self.stats["month"] == month) | (pd.isna(self.stats["month"]) & pd.isna(month)))  # type: ignore
-            & ((self.stats["day"] == day) | (pd.isna(self.stats["day"]) & pd.isna(day)))  # type: ignore
-            & ((self.stats["game_id"] == game_id) | (pd.isna(self.stats["game_id"]) & pd.isna(game_id)))  # type: ignore
-        ]
-        if len(player_row) == 0:  # type: ignore
-            self.stats.loc[len(self.stats)] = [player_id, team, year, month, day, game_id] + [0] * len(self.stats.columns[6:])  # type: ignore
-            player_row = [self.stats.index[-1]]  # type: ignore
-
-        return player_row[0]  # type: ignore
+        column: dict[str, int|str|float] = {key: 0 for key in self.stats.columns}
+        column["player_id"] = player_id
+        column["team"] = team
+        column["year"] = year
+        column["month"] = month
+        column["day"] = day
+        column["game_id"] = game_id
+        column["start_year"] = year
+        column["end_year"] = year
+        self.stats_l.append(column)
 
 
 class BattingStatsCalculator(StatCalculator):
@@ -151,11 +145,17 @@ class BattingStatsCalculator(StatCalculator):
         dtypes_dict.update({column: "int64" for column in self.basic_stat_columns})  # type: ignore
         dtypes_dict.update({column: "float64" for column in self.calculated_stat_columns})  # type: ignore
         self.stats = self.stats.astype(dtypes_dict)  # type: ignore
+        self.stats_l = []
 
     @override
     def calculate_basic_stats(self):
         # A list which contains the columns that are being grouped (based on split and find)
         to_group_by: list[str] = []
+        if self.find == "player":
+            to_group_by.append("RESP_BAT_ID")
+        elif self.find == "team":
+            to_group_by.append("BAT_TEAM_ID")
+
         if self.split == "year":
             to_group_by.append("year")
         elif self.split == "month":
@@ -168,23 +168,56 @@ class BattingStatsCalculator(StatCalculator):
         elif self.split == "game":
             to_group_by.append("GAME_ID")
 
-        if self.find == "player":
-            to_group_by.append("RESP_BAT_ID")
-        elif self.find == "team":
-            to_group_by.append("BAT_TEAM_ID")
-
         # Create a row for each player grouping
         groups = self.events.groupby(to_group_by)  # type: ignore
-        for _, group in tqdm(groups):
+        to_group_by = [elem for elem in to_group_by if elem != "RESP_BAT_ID"]
+        run1_groups = self.events[self.events["SB"] + self.events["CS"] != 0].groupby(["BASE1_RUN_ID"] + to_group_by)
+        run2_groups = self.events[self.events["SB"] + self.events["CS"] != 0].groupby(["BASE2_RUN_ID"] + to_group_by)
+        run3_groups = self.events[self.events["SB"] + self.events["CS"] != 0].groupby(["BASE3_RUN_ID"] + to_group_by)
+
+        # Create a dictionary with the player_id as the key and a list of the groupings as the value
+        groups_list = {}
+        empty_df = pd.DataFrame(columns=self.events.columns)
+        for n, group in groups:
+            groups_list[n] = [empty_df] * 4
+            groups_list[n][0] = group
+        for n, group in run1_groups:
+            if n in groups_list:
+                groups_list[n][1] = group
+            else:
+                groups_list[n] = [empty_df] * 4
+                groups_list[n][1] = group
+        for n, group in run2_groups:
+            if n in groups_list:
+                groups_list[n][2] = group
+            else:
+                groups_list[n] = [empty_df] * 4
+                groups_list[n][2] = group
+        for n, group in run3_groups:
+            if n in groups_list:
+                groups_list[n][3] = group
+            else:
+                groups_list[n] = [empty_df] * 4
+                groups_list[n][3] = group
+
+        for group, run1_groups, run2_groups, run3_groups in tqdm(groups_list.values(), total=groups.ngroups):
             # Set year, month, day, and game_id based on the grouping and what's relevant. pd.NA is used for irrelevant columns (based on find and split)
+            if not group.empty:
+                group_with_info = group
+            elif not run1_groups.empty:
+                group_with_info = run1_groups
+            elif not run2_groups.empty:
+                group_with_info = run2_groups
+            elif not run3_groups.empty:
+                group_with_info = run3_groups
             if self.split == "year":
-                year = group.iloc[0]["year"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
                 month = pd.NA
                 day = pd.NA
                 game_id = pd.NA
             elif self.split == "month":
-                year = group.iloc[0]["year"]  # type: ignore
-                month = group.iloc[0]["month"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
+                month = group_with_info.iloc[0]["month"]  # type: ignore
                 day = pd.NA
                 game_id = pd.NA
             elif self.split == "career":
@@ -193,94 +226,43 @@ class BattingStatsCalculator(StatCalculator):
                 day = pd.NA
                 game_id = pd.NA
             elif self.split == "day":
-                year = group.iloc[0]["year"]  # type: ignore
-                month = group.iloc[0]["month"]  # type: ignore
-                day = group.iloc[0]["day"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
+                month = group_with_info.iloc[0]["month"]  # type: ignore
+                day = group_with_info.iloc[0]["day"]  # type: ignore
                 game_id = pd.NA
             elif self.split == "game":
-                year = group.iloc[0]["year"]  # type: ignore
-                month = group.iloc[0]["month"]  # type: ignore
-                day = group.iloc[0]["day"]  # type: ignore
-                game_id = group.iloc[0]["GAME_ID"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
+                month = group_with_info.iloc[0]["month"]  # type: ignore
+                day = group_with_info.iloc[0]["day"]  # type: ignore
+                game_id = group_with_info.iloc[0]["GAME_ID"]  # type: ignore
             if self.find == "player":
-                player_id = group.iloc[0]["RESP_BAT_ID"]  # type: ignore
+                player_id = group_with_info.iloc[0]["RESP_BAT_ID"]  # type: ignore
                 team = pd.NA
             elif self.find == "team":
                 player_id = pd.NA
-                team = group.iloc[0]["BAT_TEAM_ID"]  # type: ignore
+                team = group_with_info.iloc[0]["BAT_TEAM_ID"]  # type: ignore
             self.create_player_row(player_id, team, year, month, day, game_id)  # type: ignore
             player_row_idx = len(self.stats) - 1
-            self.stats.loc[player_row_idx, "start_year"] = group["year"].min()  # type: ignore
-            self.stats.loc[player_row_idx, "end_year"] = group["year"].max()  # type: ignore
+            self.stats_l[player_row_idx]["start_year"] = group["year"].min()  # type: ignore
+            self.stats_l[player_row_idx]["end_year"] = group["year"].max()  # type: ignore
             for stat in self.basic_stat_columns:
                 # These need to be handled separately because they belong to a runner rather than a hitter
-                if stat in ["SB", "CS"] and self.find == "player":
+                # if stat in ["SB", "CS"] and self.find == "player":
+                #     continue
+                if stat == "SB" and self.find == "player":
+                    self.stats_l[player_row_idx][stat] = run1_groups["RUN1_SB_FL"].sum() + run2_groups["RUN2_SB_FL"].sum() + run3_groups["RUN3_SB_FL"].sum()  # type: ignore
+                    self.stats_l[player_row_idx]["SBO"] = 0
                     continue
-                if stat == "G":
+                elif stat == "CS" and self.find == "player":
+                    self.stats_l[player_row_idx][stat] = run1_groups["RUN1_CS_FL"].sum() + run2_groups["RUN2_CS_FL"].sum() + run3_groups["RUN3_CS_FL"].sum()
+                    self.stats_l[player_row_idx]["CSO"] = 0
+                    continue
+                elif stat == "G":
                     # The number of games in this sample is the number of unique GAME_IDs
-                    self.stats.loc[player_row_idx, stat] = group["GAME_ID"].nunique()  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group["GAME_ID"].nunique()  # type: ignore
                     continue
-                self.stats.loc[player_row_idx, stat] = group[stat].sum()  # type: ignore
-
-        # Calculate and correctly credit SBs and CSs
-        if self.find == "player":
-            sb_cs = self.events[(self.events["SB"] != 0) | (self.events["CS"] != 0)]  # type: ignore
-            for _, event in tqdm(sb_cs.iterrows(), total=len(sb_cs)):  # type: ignore
-                if self.split == "year":
-                    year = event["year"]  # type: ignore
-                    month = pd.NA
-                    day = pd.NA
-                    game_id = pd.NA
-                elif self.split == "month":
-                    year = event["year"]  # type: ignore
-                    month = event["month"]  # type: ignore
-                    day = pd.NA
-                    game_id = pd.NA
-                elif self.split == "career":
-                    year = pd.NA
-                    month = pd.NA
-                    day = pd.NA
-                    game_id = pd.NA
-                elif self.split == "day":
-                    year = event["year"]  # type: ignore
-                    month = event["month"]  # type: ignore
-                    day = event["day"]  # type: ignore
-                    game_id = pd.NA
-                elif self.split == "game":
-                    year = event["year"]  # type: ignore
-                    month = event["month"]  # type: ignore
-                    day = event["day"]  # type: ignore
-                    game_id = event["GAME_ID"]  # type: ignore
-                if self.find == "player":
-                    player_id = event["RESP_BAT_ID"]  # type: ignore
-                    team = pd.NA
-                elif self.find == "team":
-                    player_id = pd.NA
-                    team = event["BAT_TEAM_ID"]  # type: ignore
-                if event["RUN1_SB_FL"] == True:
-                    runner_player_id = event["BASE1_RUN_ID"]  # type: ignore
-                    runner_row_idx = self.get_player_row(runner_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[runner_row_idx, "SB"] += 1
-                if event["RUN2_SB_FL"] == True:
-                    runner_player_id = event["BASE2_RUN_ID"]  # type: ignore
-                    runner_row_idx = self.get_player_row(runner_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[runner_row_idx, "SB"] += 1
-                if event["RUN3_SB_FL"] == True:
-                    runner_player_id = event["BASE3_RUN_ID"]  # type: ignore
-                    runner_row_idx = self.get_player_row(runner_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[runner_row_idx, "SB"] += 1
-                if event["RUN1_CS_FL"] == True:
-                    runner_player_id = event["BASE1_RUN_ID"]  # type: ignore
-                    runner_row_idx = self.get_player_row(runner_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[runner_row_idx, "CS"] += 1
-                if event["RUN2_CS_FL"] == True:
-                    runner_player_id = event["BASE2_RUN_ID"]  # type: ignore
-                    runner_row_idx = self.get_player_row(runner_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[runner_row_idx, "CS"] += 1
-                if event["RUN3_CS_FL"] == True:
-                    runner_player_id = event["BASE3_RUN_ID"]  # type: ignore
-                    runner_row_idx = self.get_player_row(runner_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[runner_row_idx, "CS"] += 1
+                self.stats_l[player_row_idx][stat] = group[stat].sum()  # type: ignore
+        self.stats = pd.DataFrame(self.stats_l, columns=self.stats.columns)  # type: ignore
 
     @override
     def calculate_advanced_stats(self):
@@ -419,18 +401,32 @@ class PitchingStatsCalculator(StatCalculator):
         dtypes_dict.update({column: "float64" for column in self.calculated_stat_columns})  # type: ignore
         dtypes_dict["IP"] = "float64"
         self.stats = self.stats.astype(dtypes_dict)  # type: ignore
+        self.stats_l = []
 
     @override
     def create_player_row(self, player_id: str = pd.NA, team: str = pd.NA, year: int = pd.NA, month: int = pd.NA, day: int = pd.NA, game_id: str = pd.NA):  # type: ignore
         # This override is needed because IP isn't an integer
-        column = [player_id, team, year, month, day, game_id, year, year] + [0] * len(self.stats.columns[8:])  # type: ignore
-        column[8 + self.basic_stat_columns.index("IP")] = 0.0  # type: ignore
-        self.stats.loc[len(self.stats)] = column
+        column: dict[str, int|str|float] = {key: 0 for key in self.stats.columns}
+        column["player_id"] = player_id
+        column["team"] = team
+        column["year"] = year
+        column["month"] = month
+        column["day"] = day
+        column["game_id"] = game_id
+        column["start_year"] = year
+        column["end_year"] = year
+        column["IP"] = 0.0
+        self.stats_l.append(column)
 
     @override
     def calculate_basic_stats(self):
         # A list which contains the columns that are being grouped (based on split and find)
         to_group_by: list[str] = []
+        if self.find == "player":
+            to_group_by.append("RESP_PIT_ID")
+        elif self.find == "team":
+            to_group_by.append("FLD_TEAM_ID")
+
         if self.split == "year":
             to_group_by.append("year")
         elif self.split == "month":
@@ -443,23 +439,56 @@ class PitchingStatsCalculator(StatCalculator):
         elif self.split == "game":
             to_group_by.append("GAME_ID")
 
-        if self.find == "player":
-            to_group_by.append("RESP_PIT_ID")
-        elif self.find == "team":
-            to_group_by.append("FLD_TEAM_ID")
-
         # Create a row for each player grouping
         groups = self.events.groupby(to_group_by)  # type: ignore
-        for _, group in tqdm(groups):
+        to_group_by = [elem for elem in to_group_by if elem != "RESP_PIT_ID"]
+        run1_groups = self.events[self.events["R"] != 0].groupby(["RUN1_RESP_PIT_ID"] + to_group_by)
+        run2_groups = self.events[self.events["R"] != 0].groupby(["RUN2_RESP_PIT_ID"] + to_group_by)
+        run3_groups = self.events[self.events["R"] != 0].groupby(["RUN3_RESP_PIT_ID"] + to_group_by)
+
+        # Create a dictionary with the player_id as the key and a list of the groupings as the value
+        groups_list = {}
+        empty_df = pd.DataFrame(columns=self.events.columns)
+        for n, group in groups:
+            groups_list[n] = [empty_df] * 4
+            groups_list[n][0] = group
+        for n, group in run1_groups:
+            if n in groups_list:
+                groups_list[n][1] = group
+            else:
+                groups_list[n] = [empty_df] * 4
+                groups_list[n][1] = group
+        for n, group in run2_groups:
+            if n in groups_list:
+                groups_list[n][2] = group
+            else:
+                groups_list[n] = [empty_df] * 4
+                groups_list[n][2] = group
+        for n, group in run3_groups:
+            if n in groups_list:
+                groups_list[n][3] = group
+            else:
+                groups_list[n] = [empty_df] * 4
+                groups_list[n][3] = group
+
+        for group, run1_group, run2_group, run3_group in tqdm(groups_list.values(), total=groups.ngroups):
             # Set year, month, day, and game_id based on the grouping and what's relevant. pd.NA is used for irrelevant columns (based on find and split)
+            if not group.empty:
+                group_with_info = group
+            elif not run1_group.empty:
+                group_with_info = run1_group
+            elif not run2_group.empty:
+                group_with_info = run2_group
+            elif not run3_group.empty:
+                group_with_info = run3_group
             if self.split == "year":
-                year = group.iloc[0]["year"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
                 month = pd.NA
                 day = pd.NA
                 game_id = pd.NA
             elif self.split == "month":
-                year = group.iloc[0]["year"]  # type: ignore
-                month = group.iloc[0]["month"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
+                month = group_with_info.iloc[0]["month"]  # type: ignore
                 day = pd.NA
                 game_id = pd.NA
             elif self.split == "career":
@@ -468,125 +497,60 @@ class PitchingStatsCalculator(StatCalculator):
                 day = pd.NA
                 game_id = pd.NA
             elif self.split == "day":
-                year = group.iloc[0]["year"]  # type: ignore
-                month = group.iloc[0]["month"]  # type: ignore
-                day = group.iloc[0]["day"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
+                month = group_with_info.iloc[0]["month"]  # type: ignore
+                day = group_with_info.iloc[0]["day"]  # type: ignore
                 game_id = pd.NA
             elif self.split == "game":
-                year = group.iloc[0]["year"]  # type: ignore
-                month = group.iloc[0]["month"]  # type: ignore
-                day = group.iloc[0]["day"]  # type: ignore
-                game_id = group.iloc[0]["GAME_ID"]  # type: ignore
+                year = group_with_info.iloc[0]["year"]  # type: ignore
+                month = group_with_info.iloc[0]["month"]  # type: ignore
+                day = group_with_info.iloc[0]["day"]  # type: ignore
+                game_id = group_with_info.iloc[0]["GAME_ID"]  # type: ignore
             if self.find == "player":
-                player_id = group.iloc[0]["RESP_PIT_ID"]  # type: ignore
+                player_id = group_with_info.iloc[0]["RESP_PIT_ID"]  # type: ignore
                 team = pd.NA
             elif self.find == "team":
                 player_id = pd.NA
-                team = group.iloc[0]["FLD_TEAM_ID"]  # type: ignore
+                team = group_with_info.iloc[0]["FLD_TEAM_ID"]  # type: ignore
             self.create_player_row(player_id, team, year, month, day, game_id)  # type: ignore
-            player_row_idx = len(self.stats) - 1
-            self.stats.loc[player_row_idx, "start_year"] = group["year"].min()  # type: ignore
-            self.stats.loc[player_row_idx, "end_year"] = group["year"].max()  # type: ignore
+            player_row_idx = len(self.stats_l) - 1
+            self.stats_l[player_row_idx]["start_year"] = group["year"].min()  # type: ignore
+            self.stats_l[player_row_idx]["end_year"] = group["year"].max()  # type: ignore
             for stat in self.basic_stat_columns:
-                # These need to be handled separately because they may belong to another pitcher
-                if stat in ["R", "UER", "ER"] and self.find == "player":
+                if stat == "R" and self.find == "player":
+                    self.stats_l[player_row_idx][stat] = group[group["BAT_DEST_ID"] >= 4].shape[0] + run1_group[run1_group["RUN1_DEST_ID"] >= 4].shape[0] + run2_group[run2_group["RUN2_DEST_ID"] >= 4].shape[0] + run3_group[run3_group["RUN3_DEST_ID"] >= 4].shape[0]  # type: ignore
+                    continue
+                elif stat == "UER" and self.find == "player":
+                    self.stats_l[player_row_idx][stat] = group[group["BAT_DEST_ID"].isin((5, 7))].shape[0] + run1_group[run1_group["RUN1_DEST_ID"].isin((5, 7))].shape[0] + run2_group[run2_group["RUN2_DEST_ID"].isin((5, 7))].shape[0] + run3_group[run3_group["RUN3_DEST_ID"].isin((5, 7))].shape[0]  # type: ignore
+                    continue
+                elif stat == "ER" and self.find == "player":
+                    self.stats_l[player_row_idx][stat] = group[group["BAT_DEST_ID"].isin((4, 6))].shape[0] + run1_group[run1_group["RUN1_DEST_ID"].isin((4, 6))].shape[0] + run2_group[run2_group["RUN2_DEST_ID"].isin((4, 6))].shape[0] + run3_group[run3_group["RUN3_DEST_ID"].isin((4, 6))].shape[0]  # type: ignore
                     continue
                 elif stat == "UER" and self.find == "team":
                     # This includes runs unearned for the team
-                    self.stats.loc[player_row_idx, stat] = group["UER"].sum() + group["T_UER"].sum()  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group["UER"].sum() + group["T_UER"].sum()  # type: ignore
                     continue
                 elif stat == "ER" and self.find == "team":
                     # This includes runs earned for the team (earned runs - team unearned runs)
-                    self.stats.loc[player_row_idx, stat] = group["ER"].sum() - group["T_UER"].sum()  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group["ER"].sum() - group["T_UER"].sum()  # type: ignore
                     continue
                 if stat == "G":
                     # The number of games in this sample is the number of unique GAME_IDs
-                    self.stats.loc[player_row_idx, stat] = group["GAME_ID"].nunique()  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group["GAME_ID"].nunique()  # type: ignore
                     continue
                 if stat == "GS":
-                    for game_id in group["GAME_ID"].unique():  # type: ignore
-                        game = group[group["GAME_ID"] == game_id]  # type: ignore
-                        if game["RESP_PIT_START_FL"].iloc[0] == True:  # type: ignore
-                            self.stats.loc[player_row_idx, stat] += 1  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group[group["RESP_PIT_START_FL"] == True]["GAME_ID"].nunique()
                     continue
                 if stat == "IP":
-                    self.stats.loc[player_row_idx, stat] = group["EVENT_OUTS_CT"].sum() / 3  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group["EVENT_OUTS_CT"].sum() / 3  # type: ignore
                     continue
                 if stat == "TBF":
-                    self.stats.loc[player_row_idx, stat] = group["PA"].sum()  # type: ignore
+                    self.stats_l[player_row_idx][stat] = group["PA"].sum()  # type: ignore
                     continue
-                self.stats.loc[player_row_idx, stat] = group[stat].sum()  # type: ignore
+                self.stats_l[player_row_idx][stat] = group[stat].sum()  # type: ignore
 
-        # Calculate and correctly credit runs
-        if self.find == "player":
-            runs_scored = self.events[(self.events["R"] != 0)]  # type: ignore
-            for _, event in tqdm(runs_scored.iterrows(), total=len(runs_scored)):  # type: ignore
-                if self.split == "year":
-                    year = event["year"]  # type: ignore
-                    month = pd.NA
-                    day = pd.NA
-                    game_id = pd.NA
-                elif self.split == "month":
-                    year = event["year"]  # type: ignore
-                    month = event["month"]  # type: ignore
-                    day = pd.NA
-                    game_id = pd.NA
-                elif self.split == "career":
-                    year = pd.NA
-                    month = pd.NA
-                    day = pd.NA
-                    game_id = pd.NA
-                elif self.split == "day":
-                    year = event["year"]  # type: ignore
-                    month = event["month"]  # type: ignore
-                    day = event["day"]  # type: ignore
-                    game_id = pd.NA
-                elif self.split == "game":
-                    year = event["year"]  # type: ignore
-                    month = event["month"]  # type: ignore
-                    day = event["day"]  # type: ignore
-                    game_id = event["GAME_ID"]  # type: ignore
-                if self.find == "player":
-                    player_id = event["RESP_BAT_ID"]  # type: ignore
-                    team = pd.NA
-                elif self.find == "team":
-                    player_id = pd.NA
-                    team = event["BAT_TEAM_ID"]  # type: ignore
-                if event["BAT_DEST_ID"] >= 4:
-                    pitcher_player_id = event["RESP_PIT_ID"]  # type: ignore
-                    pitcher_row_idx = self.get_player_row(pitcher_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[pitcher_row_idx, "R"] += 1
-                    if event["BAT_DEST_ID"] in [4, 6]:
-                        self.stats.loc[pitcher_row_idx, "ER"] += 1
-                    else:
-                        self.stats.loc[pitcher_row_idx, "UER"] += 1
+        self.stats = pd.DataFrame(self.stats_l, columns=self.stats.columns)  # type: ignore
 
-                if event["RUN1_DEST_ID"] >= 4:
-                    pitcher_player_id = event["RUN1_RESP_PIT_ID"]  # type: ignore
-                    pitcher_row_idx = self.get_player_row(pitcher_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[pitcher_row_idx, "R"] += 1
-                    if event["RUN1_DEST_ID"] in [4, 6]:
-                        self.stats.loc[pitcher_row_idx, "ER"] += 1
-                    else:
-                        self.stats.loc[pitcher_row_idx, "UER"] += 1
-
-                if event["RUN2_DEST_ID"] >= 4:
-                    pitcher_player_id = event["RUN2_RESP_PIT_ID"]  # type: ignore
-                    pitcher_row_idx = self.get_player_row(pitcher_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[pitcher_row_idx, "R"] += 1
-                    if event["RUN2_DEST_ID"] in [4, 6]:
-                        self.stats.loc[pitcher_row_idx, "ER"] += 1
-                    else:
-                        self.stats.loc[pitcher_row_idx, "UER"] += 1
-
-                if event["RUN3_DEST_ID"] >= 4:
-                    pitcher_player_id = event["RUN3_RESP_PIT_ID"]  # type: ignore
-                    pitcher_row_idx = self.get_player_row(pitcher_player_id, team, year, month, day, game_id)  # type: ignore
-                    self.stats.loc[pitcher_row_idx, "R"] += 1
-                    if event["RUN3_DEST_ID"] in [4, 6]:
-                        self.stats.loc[pitcher_row_idx, "ER"] += 1
-                    else:
-                        self.stats.loc[pitcher_row_idx, "UER"] += 1
 
     @override
     def calculate_advanced_stats(self):

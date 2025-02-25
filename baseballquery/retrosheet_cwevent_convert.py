@@ -4,79 +4,15 @@ from tqdm import tqdm
 import os
 import pandas as pd  # type: ignore
 from collections import defaultdict
-
-chadwick_dtypes = {
-    "GAME_ID": "object",
-    "AWAY_TEAM_ID": "object",
-    "INN_CT": "int64",
-    "OUTS_CT": "int64",
-    "BALLS_CT": "int64",
-    "STRIKES_CT": "int64",
-    "AWAY_SCORE_CT": "int64",
-    "HOME_SCORE_CT": "int64",
-    "RESP_BAT_ID": "object",
-    "RESP_BAT_HAND_CD": "object",
-    "RESP_PIT_ID": "object",
-    "RESP_PIT_HAND_CD": "object",
-    "BASE1_RUN_ID": "object",
-    "BASE2_RUN_ID": "object",
-    "BASE3_RUN_ID": "object",
-    "BAT_FLD_CD": "int64",
-    "BAT_LINEUP_ID": "int64",
-    "EVENT_CD": "int64",
-    "AB_FL": "bool",
-    "H_CD": "int64",
-    "SH_FL": "bool",
-    "SF_FL": "bool",
-    "EVENT_OUTS_CT": "int64",
-    "DP_FL": "bool",
-    "TP_FL": "bool",
-    "RBI_CT": "int64",
-    "WP_FL": "bool",
-    "PB_FL": "bool",
-    "BATTEDBALL_CD": "object",
-    "BAT_DEST_ID": "int64",
-    "RUN1_DEST_ID": "int64",
-    "RUN2_DEST_ID": "int64",
-    "RUN3_DEST_ID": "int64",
-    "RUN1_SB_FL": "bool",
-    "RUN2_SB_FL": "bool",
-    "RUN3_SB_FL": "bool",
-    "RUN1_CS_FL": "bool",
-    "RUN2_CS_FL": "bool",
-    "RUN3_CS_FL": "bool",
-    "RUN1_PK_FL": "bool",
-    "RUN2_PK_FL": "bool",
-    "RUN3_PK_FL": "bool",
-    "RUN1_RESP_PIT_ID": "object",
-    "RUN2_RESP_PIT_ID": "object",
-    "RUN3_RESP_PIT_ID": "object",
-    "HOME_TEAM_ID": "object",
-    "BAT_TEAM_ID": "object",
-    "FLD_TEAM_ID": "object",
-    "PA_TRUNC_FL": "bool",
-    "START_BASES_CD": "int64",
-    "END_BASES_CD": "int64",
-    "RESP_PIT_START_FL": "bool",
-    "PA_BALL_CT": "int64",
-    "PA_OTHER_BALL_CT": "int64",
-    "PA_STRIKE_CT": "int64",
-    "PA_OTHER_STRIKE_CT": "int64",
-    "EVENT_RUNS_CT": "int64",
-    "BAT_SAFE_ERR_FL": "bool",
-    "FATE_RUNS_CT": "int64",
-    "BAT_START_FL": "bool",
-    "RESP_BAT_START_FL": "bool",
-}
-
+from .chadwick_cols import chadwick_dtypes
 
 def convert_files_to_csv():
-    cwd = Path(__file__).parent
-    download_dir: Path = cwd / "downloads"
+    data_dir = Path("~/.baseballquery").expanduser()
+    download_dir: Path = data_dir / "downloads"
     if not download_dir.exists():
         raise FileNotFoundError("Retrosheet files not downloaded")
 
-    outdir = cwd / "chadwick"
+    outdir = data_dir / "chadwick"
     outdir.mkdir(parents=True, exist_ok=True)
     os.chdir(download_dir)
 
@@ -99,17 +35,19 @@ def convert_files_to_csv():
                 ],
                 stdout=f,
             )
-    os.chdir(cwd)
+    os.chdir(data_dir)
 
     years: dict[str, pd.DataFrame] = defaultdict(pd.DataFrame)
-    for file in tqdm(list(outdir.iterdir()), desc="Converting Chadwick CSVs to HDF5", position=1, leave=False):
-        df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"], dtype=chadwick_dtypes)  # type: ignore
-        # df = df[chadwick_dtypes.keys()]
+    for file in tqdm(list(outdir.iterdir()), desc="Converting Chadwick CSVs to Feather", position=1, leave=False):
+        df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"])  # type: ignore
+        df["MLB_STATSAPI_APPROX"] = False
+        df["mlbam_id"] = None
+        df.astype(chadwick_dtypes)
         year: str = file.name[:4]
         years[year] = pd.concat([years[year], df])  # type: ignore
 
-    for year, df in tqdm(years.items(), desc="Saving HDF5 file", position=1, leave=False):
-        process_df(df).to_hdf(cwd / "chadwick.hdf5", key=f"year_{year}", format="table")
+    for year, df in tqdm(years.items(), desc="Saving Feather file", position=1, leave=False):
+        process_df(df).to_feather(data_dir / f"{year}.feather")
 
     # Delete Chadwick CSVs
     for child in outdir.iterdir():

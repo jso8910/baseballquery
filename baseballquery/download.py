@@ -14,8 +14,8 @@ import requests
 
 
 def download_games():
-    cwd = Path(__file__).parent
-    download_dir = cwd / "downloads"
+    data_dir = Path("~/.baseballquery").expanduser()
+    download_dir = data_dir / "downloads"
     download_dir.mkdir(parents=True, exist_ok=True)
     decade_zips = [
         "https://www.retrosheet.org/events/1910seve.zip",
@@ -38,8 +38,8 @@ def download_games():
 
 
 def download_year(year: int):
-    cwd = Path(__file__).parent
-    download_dir = cwd / "downloads"
+    data_dir = Path("~/.baseballquery").expanduser()
+    download_dir = data_dir / "downloads"
     download_dir.mkdir(parents=True, exist_ok=True)
     url = f"https://www.retrosheet.org/events/{year}eve.zip"
     request = requests.get(url)

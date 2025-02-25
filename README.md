@@ -14,7 +14,7 @@ baseballquery.update_data()
 
 Then, any time you want to add new games from the current season or previous seasons, rerun `update_data()`.
 
-When you install this package and update the datafor the first time, it will download many GB of data from Retrosheet. Eventually, it will be deleted, but you will get a total of 12 GB of data in the form of an hdf5 file. This whole process (including calculating linear weights) can take upwards of half an hour so start running this in the background once you install it before you use it. If you are installing live season data, it can take a very long time. On my computer, about 1h15 for the full 2024 season.
+When you install this package and update the datafor the first time, it will download many GB of data from Retrosheet. Eventually, it will be deleted, but you will get a total of about 1.5 GB of data in the form of a bunch of Feather files. This whole process (including calculating linear weights) can take about 15 minutes, so start running this in the background once you install it before you use it. If you are installing live season data, it can take a _very_ long time. On my computer, about 1h15 for the full 2024 season.
 
 Then, you initiate a stats split object to get stats.
 

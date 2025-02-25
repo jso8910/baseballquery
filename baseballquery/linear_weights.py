@@ -1,7 +1,7 @@
 from tqdm import tqdm
 import pandas as pd
 from pathlib import Path
-import h5py
+from . import utils
 import numpy as np
 
 
@@ -240,23 +240,21 @@ def calc_linear_weights(events: pd.DataFrame):
 
 
 def calc_weights(years_list=None):
-    cwd = Path(__file__).parent
-    chadwick_file = cwd / "chadwick.hdf5"
+    data_dir = Path("~/.baseballquery").expanduser()
 
-    linear_weights_dir = cwd
+    linear_weights_dir = data_dir
     linear_weights_dir.mkdir(parents=True, exist_ok=True)
 
-    with h5py.File(chadwick_file) as f:
-        years: list[str] = list(f.keys())
+    years = utils.get_years()
 
     if years_list:
-        years = [year for year in years if int(year[-4:]) in years_list]
+        years = [year for year in years if year in years_list]
 
     weights_pd_list = []
     for year in tqdm(years, desc="Years", position=0, leave=True):
-        events = pd.read_hdf(chadwick_file, year)
+        events = utils.get_year_events(year)
         weights = calc_linear_weights(events)  # type: ignore
-        weights["year"] = int(year[-4:])
+        weights["year"] = year
         weights_pd = pd.DataFrame(weights)
         weights_pd_list.append(weights_pd)
 

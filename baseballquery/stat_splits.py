@@ -1,5 +1,3 @@
-import h5py  # type: ignore
-from pathlib import Path
 import pandas as pd  # type: ignore
 from .stat_calculator import BattingStatsCalculator, PitchingStatsCalculator
 from .utils import get_year_events, get_years, get_linear_weights
