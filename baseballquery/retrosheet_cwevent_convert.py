@@ -6,6 +6,7 @@ import pandas as pd  # type: ignore
 from collections import defaultdict
 from .chadwick_cols import chadwick_dtypes
 
+
 def convert_files_to_csv():
     data_dir = Path("~/.baseballquery").expanduser()
     download_dir: Path = data_dir / "downloads"
@@ -59,7 +60,8 @@ def convert_files_to_csv():
         child.unlink()
     download_dir.rmdir()
 
-def process_df(df: pd.DataFrame, statsapi_approx = False) -> pd.DataFrame:
+
+def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
     baserunning_outcomes_not_pa: list[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12]
     fields: dict[int, str] = {
         3: "K",

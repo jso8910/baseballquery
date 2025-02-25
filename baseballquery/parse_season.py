@@ -6,6 +6,7 @@ from .parse_game import ParseGame
 from tqdm import tqdm
 from .utils import get_year_events
 
+
 class ParseSeason:
     def __init__(self, year: int):
         self.year = year
@@ -14,7 +15,9 @@ class ParseSeason:
         self.df = self.df.astype(chadwick_dtypes)
 
     def get_schedule(self):
-        url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={self.year}-01-01&endDate={self.year}-12-31"
+        url = (
+            f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&startDate={self.year}-01-01&endDate={self.year}-12-31"
+        )
         r = requests.get(url)
         r.raise_for_status()
         schedule = r.json()

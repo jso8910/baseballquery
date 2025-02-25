@@ -11,9 +11,13 @@ class StatSplits:
         years = get_years()
 
         if start_year not in years:
-            raise ValueError(f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?")
+            raise ValueError(
+                f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?"
+            )
         if end_year not in years:
-            raise ValueError(f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()")
+            raise ValueError(
+                f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()"
+            )
         events_years_list = []
         for year in range(start_year, end_year + 1):
             events_years_list.append(get_year_events(year))  # type: ignore

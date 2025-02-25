@@ -63,7 +63,7 @@ class StatCalculator:
         raise NotImplementedError("calculate_advanced_stats must be implemented in the child class.")
 
     def create_player_row(self, player_id: str = pd.NA, team: str = pd.NA, year: int = pd.NA, month: int = pd.NA, day: int = pd.NA, game_id: str = pd.NA):  # type: ignore
-        column: dict[str, int|str|float] = {key: 0 for key in self.stats.columns}
+        column: dict[str, int | str | float] = {key: 0 for key in self.stats.columns}
         column["player_id"] = player_id
         column["team"] = team
         column["year"] = year
@@ -254,7 +254,11 @@ class BattingStatsCalculator(StatCalculator):
                     self.stats_l[player_row_idx]["SBO"] = 0
                     continue
                 elif stat == "CS" and self.find == "player":
-                    self.stats_l[player_row_idx][stat] = run1_groups["RUN1_CS_FL"].sum() + run2_groups["RUN2_CS_FL"].sum() + run3_groups["RUN3_CS_FL"].sum()
+                    self.stats_l[player_row_idx][stat] = (
+                        run1_groups["RUN1_CS_FL"].sum()
+                        + run2_groups["RUN2_CS_FL"].sum()
+                        + run3_groups["RUN3_CS_FL"].sum()
+                    )
                     self.stats_l[player_row_idx]["CSO"] = 0
                     continue
                 elif stat == "G":
@@ -397,16 +401,16 @@ class PitchingStatsCalculator(StatCalculator):
         self.stats: pd.DataFrame = pd.DataFrame(columns=self.info_columns + self.basic_stat_columns + self.calculated_stat_columns)  # type: ignore
         dtypes_dict = {}
         dtypes_dict.update({column: "object" for column in self.info_columns})  # type: ignore
-        dtypes_dict.update({column: "int64" for column in self.basic_stat_columns})  # type: ignore
-        dtypes_dict.update({column: "float64" for column in self.calculated_stat_columns})  # type: ignore
-        dtypes_dict["IP"] = "float64"
+        dtypes_dict.update({column: "int" for column in self.basic_stat_columns})  # type: ignore
+        dtypes_dict.update({column: "float" for column in self.calculated_stat_columns})  # type: ignore
+        dtypes_dict["IP"] = "float"
         self.stats = self.stats.astype(dtypes_dict)  # type: ignore
         self.stats_l = []
 
     @override
     def create_player_row(self, player_id: str = pd.NA, team: str = pd.NA, year: int = pd.NA, month: int = pd.NA, day: int = pd.NA, game_id: str = pd.NA):  # type: ignore
         # This override is needed because IP isn't an integer
-        column: dict[str, int|str|float] = {key: 0 for key in self.stats.columns}
+        column: dict[str, int | str | float] = {key: 0 for key in self.stats.columns}
         column["player_id"] = player_id
         column["team"] = team
         column["year"] = year
@@ -550,7 +554,6 @@ class PitchingStatsCalculator(StatCalculator):
                 self.stats_l[player_row_idx][stat] = group[stat].sum()  # type: ignore
 
         self.stats = pd.DataFrame(self.stats_l, columns=self.stats.columns)  # type: ignore
-
 
     @override
     def calculate_advanced_stats(self):

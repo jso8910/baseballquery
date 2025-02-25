@@ -62,7 +62,7 @@ chadwick_dtypes = {
     "FATE_RUNS_CT": "int64",
     "RESP_BAT_START_FL": "bool",
     "MLB_STATSAPI_APPROX": "bool",
-    "mlbam_id": "Int64"
+    "mlbam_id": "Int64",
 }
 
 chadwick_defaults = {
@@ -127,5 +127,5 @@ chadwick_defaults = {
     "FATE_RUNS_CT": 0,
     "RESP_BAT_START_FL": False,
     "MLB_STATSAPI_APPROX": True,
-    "mlbam_id": None
+    "mlbam_id": None,
 }

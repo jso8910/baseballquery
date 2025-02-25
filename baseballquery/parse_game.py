@@ -42,12 +42,16 @@ class ParseGame:
         for player, _ in away_players.items():
             if not away_players[player].get("battingOrder", None):
                 continue
-            self.player_lineup_spots[self.convert_id.mlbam_to_retro(int(player[2:]))] = int(away_players[player]["battingOrder"][0])
+            self.player_lineup_spots[self.convert_id.mlbam_to_retro(int(player[2:]))] = int(
+                away_players[player]["battingOrder"][0]
+            )
 
         for player, _ in home_players.items():
             if not home_players[player].get("battingOrder", None):
                 continue
-            self.player_lineup_spots[self.convert_id.mlbam_to_retro(int(player[2:]))] = int(home_players[player]["battingOrder"][0])
+            self.player_lineup_spots[self.convert_id.mlbam_to_retro(int(player[2:]))] = int(
+                home_players[player]["battingOrder"][0]
+            )
 
         self.away_starting_pitcher = self.convert_id.mlbam_to_retro(
             self.game["liveData"]["boxscore"]["teams"]["away"]["pitchers"][0]
@@ -111,7 +115,11 @@ class ParseGame:
 
         innings = self.df.groupby(["INN_CT", "BAT_TEAM_ID"])
         for _, inning in innings:
-            inning["FATE_RUNS_CT"] = inning["AWAY_SCORE_CT"] if inning["BAT_TEAM_ID"].iloc[0] == inning["AWAY_TEAM_ID"].iloc[0] else inning["HOME_SCORE_CT"]
+            inning["FATE_RUNS_CT"] = (
+                inning["AWAY_SCORE_CT"]
+                if inning["BAT_TEAM_ID"].iloc[0] == inning["AWAY_TEAM_ID"].iloc[0]
+                else inning["HOME_SCORE_CT"]
+            )
             inning["FATE_RUNS_CT"] += inning["EVENT_RUNS_CT"]
             inning["FATE_RUNS_CT"] = inning["FATE_RUNS_CT"].iloc[-1] - inning["FATE_RUNS_CT"]
             self.df.update(inning)

@@ -43,7 +43,6 @@ def update_data():
             utils.get_year_path(last_year).unlink()
             years_updated.append(last_year)
 
-
     if years_updated:
         print("Downloading and processing data for missing years")
         for year in tqdm(years_updated, desc="Years", position=0, leave=True):
@@ -68,7 +67,6 @@ def update_data():
         df = ParseSeason(year).parse()
         if df is None:
             return
-        df = retrosheet_cwevent_convert.process_df(df, statsapi_approx = True)
+        df = retrosheet_cwevent_convert.process_df(df, statsapi_approx=True)
         df.to_feather(utils.get_year_path(year))
         linear_weights.calc_weights(years_list=[year])
-
