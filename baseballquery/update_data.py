@@ -8,6 +8,13 @@ from . import retrosheet_cwevent_convert
 from . import linear_weights
 
 
+def set_first_data_year(year):
+    data_dir = Path("~/.baseballquery").expanduser()
+    data_dir.mkdir(exist_ok=True)
+    with open(data_dir / "min_year.txt", "w") as f:
+        f.write(str(year))
+
+
 def update_data():
     print("Updating data...")
     data_dir = Path("~/.baseballquery").expanduser()
@@ -15,7 +22,11 @@ def update_data():
         data_dir.mkdir()
 
     # First and last year of retrosheet data
-    START_YEAR = 1912
+    if not (data_dir / "min_year.txt").exists():
+        set_first_data_year(1912)
+    with open(data_dir / "min_year.txt", "r") as f:
+        min_year = int(f.read())
+    START_YEAR = min_year
     END_YEAR = 2024
     years = [year for year in range(START_YEAR, END_YEAR + 1)]
 

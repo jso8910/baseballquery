@@ -12,7 +12,17 @@ import baseballquery
 baseballquery.update_data()
 ```
 
-Then, any time you want to add new games from the current season or previous seasons, rerun `update_data()`.
+`update_data()` downloads a bunch of data to the ~/.baseballquery directory (on Windows, the folder name will be the same, just in your user home directory). If you want to delete the data, delete this directory.
+
+By default, all data from 1912 onwards is downloaded. If you want to download fewer years into the past (for example, only from 1990 onwards), run this before running `update_data()`
+
+```py
+baseballquery.set_first_data_year(1990)    # Now, only years from 1990 to the current year are downloaded
+```
+
+Don't set this to a value that's after the current year. Nothing will be downloaded if you do this.
+
+Any time you want to add new games from the current season or any new released Retrosheet data, rerun `update_data()`.
 
 When you install this package and update the datafor the first time, it will download many GB of data from Retrosheet. Eventually, it will be deleted, but you will get a total of about 1.5 GB of data in the form of a bunch of Feather files. This whole process (including calculating linear weights) can take about 15 minutes, so start running this in the background once you install it before you use it. If you are installing live season data, it can take a _very_ long time. On my computer, about 1h15 for the full 2024 season.
 
