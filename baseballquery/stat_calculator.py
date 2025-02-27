@@ -1,7 +1,5 @@
 import pandas as pd  # type: ignore
 from tqdm import tqdm
-import warnings
-from pandas.errors import SettingWithCopyWarning  # type: ignore
 from typing_extensions import override
 import numpy as np
 
@@ -17,7 +15,6 @@ class StatCalculator:
         """
         Parent class for all stat calculators. This class should not be instantiated directly.
         """
-        warnings.simplefilter(action="ignore", category=SettingWithCopyWarning)
         self.info_columns = [  # Each column that isn't applicable (eg game_id if you set month) will be set to N/A
             "player_id",
             "team",
