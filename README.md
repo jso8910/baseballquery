@@ -3,7 +3,10 @@
 Essentially, this is a Stathead replacement. You can query stats in detail by either using pre-created splits or curating your own.
 
 ## Getting started
-Before you use this, you need to [install Chadwick](https://github.com/chadwickbureau/chadwick/blob/master/INSTALL).
+Before you use this, you need to [install Chadwick](https://github.com/chadwickbureau/chadwick/blob/master/INSTALL). Then, this package can be installed from PyPi.
+```zsh
+pip install baseballquery
+```
 
 Then, run these commands and you're good to go!
 
