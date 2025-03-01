@@ -1,7 +1,6 @@
 import pandas as pd
 from .convert_mlbam import ConvertMLBAM
 from copy import deepcopy
-import json
 from pathlib import Path
 import requests
 from collections import defaultdict
@@ -29,6 +28,7 @@ class ParsePlateAppearance:
         convert_id: ConvertMLBAM,
         runners: list[str | None],
         resp_pitchers: list[str | None],
+        event_types_list: list[dict],
         top_level_pa: bool = True,
         ghost_runner_added: bool = False,
         run_scored_ct_prev: int = 0,
@@ -56,6 +56,7 @@ class ParsePlateAppearance:
         self.top_level_pa = top_level_pa
         self.ghost_runner_added = ghost_runner_added
         self.run_scored_ct_prev = run_scored_ct_prev
+        self.event_types_list = event_types_list
 
     def parse(self) -> None:
         event_type_to_cwevent = {
@@ -188,6 +189,7 @@ class ParsePlateAppearance:
                 self.convert_id,
                 self.runners,
                 self.resp_pitchers,
+                self.event_types_list,
                 top_level_pa=False,
                 ghost_runner_added=self.ghost_runner_added,
                 run_scored_ct_prev=self.df["EVENT_RUNS_CT"].sum(),
@@ -647,7 +649,7 @@ class ParsePlateAppearance:
         event_type = self.plate_appearance["playEvents"][-1]["details"]["eventType"]
 
         # eventTypes documentation from https://statsapi.mlb.com/api/v1/eventTypes
-        event_types_list = json.loads(open(Path(__file__).parent / "eventTypes.json").read())
+        event_types_list = self.event_types_list
         eventTypes = {event["code"]: event for event in event_types_list}
         # Custom proxy property for foul_error
         eventTypes["foul_error"] = eventTypes["error"]

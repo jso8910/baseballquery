@@ -1,7 +1,9 @@
 import requests
 import pandas as pd
+from pathlib import Path
+import json
 from .convert_mlbam import ConvertMLBAM
-from .chadwick_cols import chadwick_dtypes
+from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
 from .parse_game import ParseGame
 from tqdm import tqdm
 from .utils import get_year_events
@@ -13,6 +15,8 @@ class ParseSeason:
         self.convert_mlbam = ConvertMLBAM()
         self.df = pd.DataFrame(columns=chadwick_dtypes.keys())  # type: ignore
         self.df = self.df.astype(chadwick_dtypes)
+        self.game_info = pd.DataFrame(columns=cwgame_dtypes.keys())  # type: ignore
+        self.game_info = self.game_info.astype(cwgame_dtypes)
 
     def get_schedule(self):
         url = (
@@ -45,10 +49,16 @@ class ParseSeason:
                 games.add(game["link"])
         if not games:
             return
-        for game in tqdm(games, desc="Games", position=0, leave=True):
+        cwd = Path(__file__).parent
+        event_types_list = json.loads(open(Path(__file__).parent / "eventTypes.json").read())
+        for game in tqdm(list(games)[:20], desc="Games", position=0, leave=True):
             game_data = requests.get(f"https://statsapi.mlb.com{game}").json()
-            parse_game = ParseGame(game_data, self.convert_mlbam)
+            parse_game = ParseGame(game_data, self.convert_mlbam, event_types_list)
             parse_game.parse()
+            parse_game.parse_game_info()
             parse_game.df["mlbam_id"] = game_data["gamePk"]
             self.df = pd.concat([self.df, parse_game.df])
-        return self.df
+            self.game_info = pd.concat([self.game_info, pd.DataFrame([parse_game.game_info])])
+        self.df = self.df.reset_index(drop=True)
+        self.game_info = self.game_info.reset_index(drop=True)
+        return self.df, self.game_info

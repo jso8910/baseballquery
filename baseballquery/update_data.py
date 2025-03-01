@@ -41,15 +41,16 @@ def update_data(redownload=False):
 
     with open(data_dir / "min_year.txt", "r") as f:
         min_year = int(f.read())
+
     START_YEAR = min_year
     END_YEAR = 2024
     years = [year for year in range(START_YEAR, END_YEAR + 1)]
 
     years_feather = utils.get_years()
-    years_updated = [year for year in years if f"year_{year}" not in years_feather]
+    years_updated = [year for year in years if year not in years_feather]
 
     # Check that the last year is retrosheet, not StatsAPI approximated
-    years_in_df = [year for year in years if f"year_{year}" in years_feather]
+    years_in_df = [year for year in years if year in years_feather]
     if years_in_df:
         last_year = years_in_df[-1]
         df = utils.get_year_events(last_year)
@@ -83,6 +84,7 @@ def update_data(redownload=False):
         df = ParseSeason(year).parse()
         if df is None:
             return
-        df = retrosheet_cwevent_convert.process_df(df, statsapi_approx=True)
-        df.to_feather(utils.get_year_path(year))
+        df_proc = retrosheet_cwevent_convert.process_df(df[0], statsapi_approx=True)
+        df_proc.to_feather(utils.get_year_path(year))
+        df[1].to_feather(utils.get_year_cwgame_path(year))
         linear_weights.calc_weights(years_list=[year])

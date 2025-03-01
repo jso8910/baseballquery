@@ -1,18 +1,19 @@
 import pandas as pd
-from pathlib import Path
+from datetime import datetime
 from .parse_plate_appearance import ParsePlateAppearance
 from .convert_mlbam import ConvertMLBAM
-from .chadwick_cols import chadwick_dtypes
+from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
 
 
 class ParseGame:
-    def __init__(self, game: dict, convert_id: ConvertMLBAM):
+    def __init__(self, game: dict, convert_id: ConvertMLBAM, event_types_list: list[dict]):
         self.game = game
         self.df = pd.DataFrame(columns=chadwick_dtypes.keys())  # type: ignore
         self.df = self.df.astype(chadwick_dtypes)
         self.starting_lineup_away = {}
         self.starting_lineup_home = {}
         self.convert_id = convert_id
+        self.event_types_list = event_types_list
         away_players = self.game["liveData"]["boxscore"]["teams"]["away"]["players"]
         for player, _ in away_players.items():
             if away_players[player].get("battingOrder", "").endswith("00"):
@@ -71,6 +72,56 @@ class ParseGame:
         self.home_score = 0
         self.away_score = 0
 
+        self.game_info: dict[str, int|str|None] = {key: None for key in cwgame_dtypes.keys()}
+
+    def parse_game_info(self):
+        self.game_info["GAME_ID"] = self.game_id
+        dt = datetime.strptime(self.game["gameData"]["datetime"]["officialDate"], "%Y-%m-%d")
+        self.game_info["GAME_DY"] = dt.weekday()
+        self.game_info["START_GAME_TM"] = int(self.game["gameData"]["datetime"]["time"].replace(":", ""))
+        self.game_info["DAYNIGHT_PARK_CD"] = "N" if self.game["gameData"]["datetime"]["dayNight"] == "night" else "D"
+        self.game_info["PARK_ID"] = None
+        self.game_info["ATTEND_PARK_CT"] = self.game["gameData"]["gameInfo"]["attendance"]
+        self.game_info["TEMP_PARK_CT"] = int(self.game["gameData"]["weather"]["temp"])
+        wind = self.game["gameData"]["weather"]["wind"].split(", ")[1]
+        if wind == "In From CF":
+            self.game_info["WIND_DIRECTION"] = 6
+        elif wind == "In From LF":
+            self.game_info["WIND_DIRECTION"] = 5
+        elif wind == "In From RF":
+            self.game_info["WIND_DIRECTION"] = 7
+        elif wind == "L To R":
+            self.game_info["WIND_DIRECTION"] = 4
+        elif wind == "Out To CF":
+            self.game_info["WIND_DIRECTION"] = 2
+        elif wind == "Out To LF":
+            self.game_info["WIND_DIRECTION"] = 1
+        elif wind == "Out To RF":
+            self.game_info["WIND_DIRECTION"] = 3
+        elif wind == "R To L":
+            self.game_info["WIND_DIRECTION"] = 8
+        else:
+            self.game_info["WIND_DIRECTION"] = 0
+        self.game_info["WIND_SPEED_PARK_CT"] = int(self.game["gameData"]["weather"]["wind"].split(" ")[0])
+        self.game_info["FIELD_PARK_CD"] = 0
+        self.game_info["PRECIP_PARK_CT"] = 0
+        self.game_info["SKY_PARK_CD"] = 0
+        self.game_info["MINUTES_GAME_CT"] = self.game["gameData"]["gameInfo"]["gameDurationMinutes"]
+
+        game_decisions = self.game["liveData"]["decisions"]
+        if game_decisions.get("winner", None):
+            self.game_info["WIN_PIT_ID"] = self.convert_id.mlbam_to_retro(int(game_decisions["winner"]["id"]))
+        else:
+            self.game_info["WIN_PIT_ID"] = None
+        if game_decisions.get("loser", None):
+            self.game_info["LOSE_PIT_ID"] = self.convert_id.mlbam_to_retro(int(game_decisions["loser"]["id"]))
+        else:
+            self.game_info["LOSE_PIT_ID"] = None
+        if game_decisions.get("save", None):
+            self.game_info["SAVE_PIT_ID"] = self.convert_id.mlbam_to_retro(int(game_decisions["save"]["id"]))
+        else:
+            self.game_info["SAVE_PIT_ID"] = None
+
     def parse(self):
         runners = [None, None, None]
         runner_resp_pit_id = [None, None, None]
@@ -105,6 +156,7 @@ class ParseGame:
                 self.convert_id,
                 runners,  # type: ignore
                 runner_resp_pit_id,  # type: ignore
+                self.event_types_list
             )
             pa.parse()
             self.df = pd.concat([self.df, pa.df], ignore_index=True)
