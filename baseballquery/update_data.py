@@ -14,19 +14,21 @@ def set_first_data_year(year):
     with open(data_dir / "min_year.txt", "w") as f:
         f.write(str(year))
 
+def delete_data():
+    data_dir = Path("~/.baseballquery").expanduser()
+    min_year = 1912
+    if data_dir.exists():
+        if (data_dir / "min_year.txt").exists():
+            with open(data_dir / "min_year.txt", "r") as f:
+                min_year = int(f.read())
+        for file in data_dir.iterdir():
+            file.unlink()
+    set_first_data_year(min_year)
 
 def update_data(redownload=False):
     if redownload:
         print("Redownloading all data...")
-        data_dir = Path("~/.baseballquery").expanduser()
-        min_year = 1912
-        if data_dir.exists():
-            if (data_dir / "min_year.txt").exists():
-                with open(data_dir / "min_year.txt", "r") as f:
-                    min_year = int(f.read())
-            for file in data_dir.iterdir():
-                file.unlink()
-        set_first_data_year(min_year)
+        delete_data()
         
     print("Updating data...")
     data_dir = Path("~/.baseballquery").expanduser()
@@ -54,6 +56,7 @@ def update_data(redownload=False):
         if df["MLB_STATSAPI_APPROX"].any():
             print("Deleting and redownloading StatsAPI approximated year")
             utils.get_year_path(last_year).unlink()
+            utils.get_year_cwgame_path(last_year).unlink()
             years_updated.append(last_year)
 
     if years_updated:

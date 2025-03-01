@@ -24,6 +24,10 @@ class StatSplits:
 
         self.linear_weights = get_linear_weights()  # type: ignore
         self.events = pd.concat(events_years_list)  # type: ignore
+        self.events.loc[:, "year"] = self.events.loc[:, "GAME_ID"].str.slice(3, 7).astype(int)  # type: ignore
+        self.events.loc[:, "month"] = self.events.loc[:, "GAME_ID"].str.slice(7, 9).astype(int)  # type: ignore
+        self.events.loc[:, "day"] = self.events.loc[:, "GAME_ID"].str.slice(9, 11).astype(int)  # type: ignore
+
         self.stats: pd.DataFrame | None = None
         self.split = "year"
         self.find = "player"

@@ -129,3 +129,22 @@ chadwick_defaults = {
     "MLB_STATSAPI_APPROX": True,
     "mlbam_id": None,
 }
+
+cwgame_dtypes = {
+    "GAME_DY": "object",
+    "START_GAME_TM": "Int64",
+    "DH_FL": "bool",
+    "DAYNIGHT_PARK_CD": "object",
+    "PARK_ID": "object",
+    "ATTEND_PARK_CT": "Int64",
+    "TEMP_PARK_CT": "Int64",
+    "WIND_DIRECTION_PARK_CD": "Int64",
+    "WIND_SPEED_PARK_CT": "Int64",
+    "FIELD_PARK_CD": "Int64",
+    "PRECIP_PARK_CD": "Int64",
+    "SKY_PARK_CD": "Int64",
+    "MINUTES_GAME_CT": "Int64",
+    "WIN_PIT_ID": "object",
+    "LOSE_PIT_ID": "object",
+    "SAVE_PIT_ID": "object",
+}

@@ -4,8 +4,7 @@ from tqdm import tqdm
 import os
 import pandas as pd  # type: ignore
 from collections import defaultdict
-from .chadwick_cols import chadwick_dtypes
-
+from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
 
 def convert_files_to_csv():
     data_dir = Path("~/.baseballquery").expanduser()
@@ -20,35 +19,77 @@ def convert_files_to_csv():
     for file in tqdm(list(download_dir.iterdir()), desc="Converting retrosheet to Chadwick", position=1, leave=False):
         if not file.name[-4:] in (".EVN", ".EVA"):
             continue
+
+        # Process event-level info with cwevent
         with open(outdir / f"{file.name}.csv", "w") as f:
-            _ = subprocess.run(
-                [
-                    "cwevent",
-                    "-q",
-                    "-f",
-                    "0-2,4-6,8-9,12-13,16-17,26-28,32-34,36-45,47,58-61,66-77",
-                    "-x",
-                    "0-2,12-14,16,20,33,38-39,44-45,50,55",
-                    f"-y",
-                    f"{file.stem[:4]}",
-                    f"-n",
-                    f"{file}",
-                ],
-                stdout=f,
-            )
+            try:
+                _ = subprocess.run(
+                    [
+                        "cwevent",
+                        "-q",
+                        "-f",
+                        "0-2,4-6,8-9,12-13,16-17,26-28,32-34,36-45,47,58-61,66-77",
+                        "-x",
+                        "0-2,12-14,16,20,33,38-39,44-45,50,55",
+                        f"-y",
+                        f"{file.stem[:4]}",
+                        f"-n",
+                        f"{file}",
+                    ],
+                    stdout=f,
+                    check=True
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error converting {file.name}. Is Chadwick correctly installed? Deleting all Chadwick files to avoid issues...")
+                for file in outdir.iterdir():
+                    file.unlink()
+                outdir.rmdir()
+                raise e
+
+        # Process individual game info with cwgame
+        with open(outdir / f"cwgame-{file.name}.csv", "w") as f:
+            try:
+                _ = subprocess.run(
+                    [
+                        "cwgame",
+                        "-q",
+                        "-f",
+                        "0,3-6,9,18,26-32,42-44",
+                        f"-y",
+                        f"{file.stem[:4]}",
+                        f"-n",
+                        f"{file}",
+                    ],
+                    stdout=f,
+                    stderr=subprocess.DEVNULL,  # Sometimes warnings about integer values are put here... don't need to see
+                    check=True,
+                )
+            except subprocess.CalledProcessError as e:
+                print(f"Error converting {file.name}. Is Chadwick correctly installed? Deleting all Chadwick files to avoid issues...")
+                for file in outdir.iterdir():
+                    file.unlink()
+                outdir.rmdir()
     os.chdir(data_dir)
 
-    years: dict[str, pd.DataFrame] = defaultdict(pd.DataFrame)
+    years: dict[int, pd.DataFrame] = defaultdict(pd.DataFrame)
+    years_cwgame: dict[int, pd.DataFrame] = defaultdict(pd.DataFrame)
     for file in tqdm(list(outdir.iterdir()), desc="Converting Chadwick CSVs to Feather", position=1, leave=False):
+        if file.name.startswith("cwgame-"):
+            df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"])  # type: ignore
+            df.astype(cwgame_dtypes)
+            year = int(file.name[7:11])
+            years_cwgame[year] = pd.concat([years_cwgame[year], df])
+            continue
         df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"])  # type: ignore
         df["MLB_STATSAPI_APPROX"] = False
         df["mlbam_id"] = None
         df.astype(chadwick_dtypes)
-        year: str = file.name[:4]
+        year = int(file.name[:4])
         years[year] = pd.concat([years[year], df])  # type: ignore
 
     for year, df in tqdm(years.items(), desc="Saving Feather file", position=1, leave=False):
         process_df(df).to_feather(data_dir / f"{year}.feather")
+        years_cwgame[year].to_feather(data_dir / f"cwgame-{year}.feather")
 
     # Delete Chadwick CSVs
     for child in outdir.iterdir():
