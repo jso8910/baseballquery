@@ -15,7 +15,19 @@ def set_first_data_year(year):
         f.write(str(year))
 
 
-def update_data():
+def update_data(redownload=False):
+    if redownload:
+        print("Redownloading all data...")
+        data_dir = Path("~/.baseballquery").expanduser()
+        min_year = 1912
+        if data_dir.exists():
+            if (data_dir / "min_year.txt").exists():
+                with open(data_dir / "min_year.txt", "r") as f:
+                    min_year = int(f.read())
+            for file in data_dir.iterdir():
+                file.unlink()
+        set_first_data_year(min_year)
+        
     print("Updating data...")
     data_dir = Path("~/.baseballquery").expanduser()
     if not data_dir.exists():
@@ -24,6 +36,7 @@ def update_data():
     # First and last year of retrosheet data
     if not (data_dir / "min_year.txt").exists():
         set_first_data_year(1912)
+
     with open(data_dir / "min_year.txt", "r") as f:
         min_year = int(f.read())
     START_YEAR = min_year
