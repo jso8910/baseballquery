@@ -51,7 +51,7 @@ class ParseSeason:
             return
         cwd = Path(__file__).parent
         event_types_list = json.loads(open(Path(__file__).parent / "eventTypes.json").read())
-        for game in tqdm(list(games)[:20], desc="Games", position=0, leave=True):
+        for game in tqdm(list(games), desc="Games", position=0, leave=True):
             game_data = requests.get(f"https://statsapi.mlb.com{game}").json()
             parse_game = ParseGame(game_data, self.convert_mlbam, event_types_list)
             parse_game.parse()
