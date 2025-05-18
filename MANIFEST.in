@@ -1,2 +1,2 @@
-include baseballquery/register/data/*
+graft baseballquery/register/data
 include baseballquery/eventTypes.json
