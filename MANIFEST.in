@@ -1,2 +1,2 @@
-recursive-include baseballquery/register *
+include baseballquery/register/data/*
 include baseballquery/eventTypes.json
