@@ -49,7 +49,6 @@ _ = setup(
             "baseballquery/downloads",
         ]
     ),
-    data_files=[("", ["baseballquery/eventTypes.json", *glob("baseballquery/register/data/*")])],
     package_dir={
         "package": "package",
     },
