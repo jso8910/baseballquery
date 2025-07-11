@@ -4,26 +4,31 @@ from .utils import get_year_events, get_years, get_linear_weights
 
 
 class StatSplits:
-    def __init__(self, start_year: int, end_year: int):
+    def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
         """
         Parent class. Should not be instantiated directly
         """
-        years = get_years()
+        # This is useful for if you want to use the class without specifying a year range, e.g. if you already have the events DataFrame loaded into memory
+        if events is not None:
+            self.events = events
+            self.linear_weights = get_linear_weights()
+        else:
+            years = get_years()
 
-        if start_year not in years:
-            raise ValueError(
-                f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?"
-            )
-        if end_year not in years:
-            raise ValueError(
-                f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()"
-            )
-        events_years_list = []
-        for year in range(start_year, end_year + 1):
-            events_years_list.append(get_year_events(year))  # type: ignore
+            if start_year not in years:
+                raise ValueError(
+                    f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?"
+                )
+            if end_year not in years:
+                raise ValueError(
+                    f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()"
+                )
+            events_years_list = []
+            for year in range(start_year, end_year + 1):
+                events_years_list.append(get_year_events(year))  # type: ignore
 
-        self.linear_weights = get_linear_weights()  # type: ignore
-        self.events = pd.concat(events_years_list)  # type: ignore
+            self.linear_weights = get_linear_weights()  # type: ignore
+            self.events = pd.concat(events_years_list)  # type: ignore
         self.events.loc[:, "year"] = self.events.loc[:, "GAME_ID"].str.slice(3, 7).astype(int)  # type: ignore
         self.events.loc[:, "month"] = self.events.loc[:, "GAME_ID"].str.slice(7, 9).astype(int)  # type: ignore
         self.events.loc[:, "day"] = self.events.loc[:, "GAME_ID"].str.slice(9, 11).astype(int)  # type: ignore
@@ -301,11 +306,11 @@ class StatSplits:
 
 
 class BattingStatSplits(StatSplits):
-    def __init__(self, start_year: int, end_year: int):
+    def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
         """
         Class to calculate batting splits. Keep in mind that once you limit a split (other than "set_split" and "set_subdivision"), you cannot go back to the original data.
         """
-        super().__init__(start_year, end_year)
+        super().__init__(start_year, end_year, events)
         self.batting_calculator: BattingStatsCalculator | None = None
 
     def calculate_stats(self):
@@ -320,11 +325,11 @@ class BattingStatSplits(StatSplits):
 
 
 class PitchingStatSplits(StatSplits):
-    def __init__(self, start_year: int, end_year: int):
+    def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
         """
         Class to calculate pitching splits. Keep in mind that once you limit a split (other than "set_split" and "set_subdivision"), you cannot go back to the original data.
         """
-        super().__init__(start_year, end_year)
+        super().__init__(start_year, end_year, events)
         self.pitching_calculator: PitchingStatsCalculator | None = None
 
     def calculate_stats(self):
