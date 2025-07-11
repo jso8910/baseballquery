@@ -261,6 +261,7 @@ class BattingStatsCalculator(StatCalculator):
         })
 
         self.stats = pd.DataFrame(self.stats_l, columns=self.stats.columns)
+        del self.stats_l
 
     @override
     def calculate_advanced_stats(self):
@@ -543,6 +544,7 @@ class PitchingStatsCalculator(StatCalculator):
         self.stats_l["IP"] = self.stats_l["IP"] / 3
 
         self.stats = pd.DataFrame(self.stats_l, columns=self.stats.columns)
+        del self.stats_l
 
     @override
     def calculate_advanced_stats(self):
