@@ -185,8 +185,11 @@ class StatSplits:
         Parameters:
         teams (list): List of team abbreviations (the retrosheet ones, e.g. "BOS", "NYA")
         """
+        assert all(len(team) == 3 for team in teams), "Invalid team abbreviation. Team abbreviations must be exactly 3 uppercase alphabetic characters."
         assert all(len(team) == 3 for team in teams), "Invalid team abbreviation"
-        self.sql_query_where["fld_team_id"] = f"events.FLD_TEAM_ID IN ({', '.join([f'\'{team}\'' for team in teams])})"
+        assert all(team.isupper() for team in teams), "Team abbreviations must be uppercase"
+        assert all(team.isalpha() for team in teams), "Team abbreviations must be alphabetic"
+        self.sql_query_where["fld_team_id"] = f"events.FLD_TEAM_ID IN ({', '.join(f'\'{team}\'' for team in teams)})"
 
     def set_batting_team(self, teams: list[str]):
         """
@@ -195,8 +198,11 @@ class StatSplits:
         Parameters:
         teams (list): List of team abbreviations (the retrosheet ones, e.g. "BOS", "NYA")
         """
+        assert all(len(team) == 3 for team in teams), "Invalid team abbreviation. Team abbreviations must be exactly 3 uppercase alphabetic characters."
         assert all(len(team) == 3 for team in teams), "Invalid team abbreviation"
-        self.sql_query_where["bat_team_id"] = f"events.BAT_TEAM_ID IN ({', '.join([f'\'{team}\'' for team in teams])})"
+        assert all(team.isupper() for team in teams), "Team abbreviations must be uppercase"
+        assert all(team.isalpha() for team in teams), "Team abbreviations must be alphabetic"
+        self.sql_query_where["bat_team_id"] = f"events.BAT_TEAM_ID IN ({', '.join(f'\'{team}\'' for team in teams)})"
 
     def set_innings(self, innings: list[int]):
         """
@@ -267,7 +273,7 @@ class StatSplits:
         assert all(score >= 0 for score in scores), "Invalid away team score"
         self.sql_query_where["away_score_ct"] = f"events.AWAY_SCORE_CT IN ({', '.join([str(score) for score in scores])})"
 
-    def set_base_situation(self, base_situations: list[str]):
+    def set_base_situation(self, base_situations: list[int]):
         """
         Limit the data to only include PAs with certain base situations at the start of the play (e.g. if a runner on first steals second, the base situation would be 0b001 at the start of the play).
 
