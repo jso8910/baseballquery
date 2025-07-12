@@ -281,7 +281,7 @@ class StatSplits:
 class BattingStatSplits(StatSplits):
     def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
         """
-        Class to calculate batting splits. Keep in mind that once you limit a split (other than "set_split" and "set_subdivision"), you cannot go back to the original data.
+        Class to calculate batting splits.
         """
         super().__init__(start_year, end_year, events)
         self.batting_calculator: BattingStatsCalculator | None = None
@@ -303,7 +303,7 @@ class BattingStatSplits(StatSplits):
 class PitchingStatSplits(StatSplits):
     def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
         """
-        Class to calculate pitching splits. Keep in mind that once you limit a split (other than "set_split" and "set_subdivision"), you cannot go back to the original data.
+        Class to calculate pitching splits.
         """
         super().__init__(start_year, end_year, events)
         self.pitching_calculator: PitchingStatsCalculator | None = None
