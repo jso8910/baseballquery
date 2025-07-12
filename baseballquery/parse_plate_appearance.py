@@ -1,7 +1,6 @@
 import pandas as pd
 from .convert_mlbam import ConvertMLBAM
 from copy import deepcopy
-from pathlib import Path
 import requests
 from collections import defaultdict
 from .chadwick_cols import chadwick_dtypes, chadwick_defaults
@@ -63,13 +62,13 @@ class ParsePlateAppearance:
             "pickoff_1b": 8,
             "pickoff_2b": 8,
             "pickoff_3b": 8,
-            "pitcher_step_off": 100,
+            "pitcher_step_off": 99,
             "pickoff_error_1b": 8,
             "pickoff_error_2b": 8,
             "pickoff_error_3b": 8,
-            "batter_timeout": 100,
-            "mound_visit": 100,
-            "no_pitch": 100,
+            "batter_timeout": 99,
+            "mound_visit": 99,
+            "no_pitch": 99,
             "single": 20,
             "double": 21,
             "triple": 22,
@@ -94,8 +93,8 @@ class ParsePlateAppearance:
             "fielder_interference": 12,  # Not in my sample. Assume it's some advance. But cwevent doesn't document interference either (and interference (17) is always CI)
             "runner_interference": 12,  # Not in my sample. Assume it's some out. But cwevent doesn't document interference either (and interference (17) is always CI)
             "fan_interference": 2,  # Not in my sample. Assume it's some out (surely if it were a homer converted to a hit, it would be eg double). But cwevent doesn't document interference either (and interference (17) is always CI)
-            "batter_turn": 100,  # NOTE: probably doesnt matter
-            "ejection": 100,
+            "batter_turn": 99,  # NOTE: probably doesnt matter
+            "ejection": 99,
             "cs_double_play": 6,
             "defensive_indiff": 5,
             "sac_fly_double_play": 2,
@@ -104,20 +103,20 @@ class ParsePlateAppearance:
             "walk": 14,
             "intent_walk": 15,
             "hit_by_pitch": 16,
-            "injury": 100,
-            "os_ruling_pending_prior": 100,
-            "os_ruling_pending_primary": 100,
-            "at_bat_start": 100,
+            "injury": 99,
+            "os_ruling_pending_prior": 99,
+            "os_ruling_pending_primary": 99,
+            "at_bat_start": 99,
             "passed_ball": 10,
             "other_advance": 12,  # I think? But not used in my 1000 games from 2022
             "runner_double_play": 12,  # Not sure. Not used in my sample I checked
-            "runner_placed": 100,  # Manfred runner!
-            "pitching_substitution": 100,
-            "offensive_substitution": 100,
-            "defensive_switch": 100,
-            "umpire_substitution": 100,
-            "pitcher_switch": 100,
-            "game_advisory": 100,
+            "runner_placed": 99,  # Manfred runner!
+            "pitching_substitution": 99,
+            "offensive_substitution": 99,
+            "defensive_switch": 99,
+            "umpire_substitution": 99,
+            "pitcher_switch": 99,
+            "game_advisory": 99,
             "stolen_base": 4,
             "stolen_base_2b": 4,
             "stolen_base_3b": 4,
@@ -126,7 +125,7 @@ class ParsePlateAppearance:
             "caught_stealing_2b": 6,
             "caught_stealing_3b": 6,
             "caught_stealing_home": 6,
-            "defensive_substitution": 100,
+            "defensive_substitution": 99,
             "pickoff_caught_stealing_2b": 8,
             "pickoff_caught_stealing_3b": 8,
             "pickoff_caught_stealing_home": 8,

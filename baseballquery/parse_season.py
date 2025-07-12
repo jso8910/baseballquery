@@ -31,7 +31,7 @@ class ParseSeason:
         try:
             df = get_year_events(self.year)
             if not df.empty:
-                self.df = pd.concat([self.df, df])
+                self.df = pd.concat([self.df.reset_index(drop=True), df])
         except KeyError:
             pass
         schedule = self.get_schedule()
@@ -44,7 +44,7 @@ class ParseSeason:
                 # Only finished games
                 if not game["status"]["codedGameState"] == "F":
                     continue
-                if game["gamePk"] in self.df["mlbam_id"].values:
+                if str(game["gamePk"]) in self.df["mlbam_id"].values:
                     continue
                 games.add(game["link"])
         if not games:

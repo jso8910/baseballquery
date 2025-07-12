@@ -2,9 +2,12 @@ import subprocess
 from pathlib import Path
 from tqdm import tqdm
 import os
-import pandas as pd  # type: ignore
+import pandas as pd
 from collections import defaultdict
 from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
+from .database import engine
+import sqlalchemy
+from sqlalchemy import text
 
 def convert_files_to_csv():
     data_dir = Path("~/.baseballquery").expanduser()
@@ -87,9 +90,48 @@ def convert_files_to_csv():
         year = int(file.name[:4])
         years[year] = pd.concat([years[year], df])  # type: ignore
 
-    for year, df in tqdm(years.items(), desc="Saving Feather file", position=1, leave=False):
-        process_df(df).to_feather(data_dir / f"{year}.feather")
-        years_cwgame[year].to_feather(data_dir / f"cwgame-{year}.feather")
+    for year, df in tqdm(years.items(), desc="Saving to SQL", position=1, leave=False):
+        proc_df = process_df(df)
+        if not sqlalchemy.inspect(engine).has_table("events"):
+            query = text(pd.io.sql.get_schema(df, 'events'))  # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        # Save the processed DataFrame to SQL
+        events_table = sqlalchemy.Table("events", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_events = events_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_events, proc_df.to_dict(orient="records"))  # type: ignore
+        # proc_df.to_sql("events", engine, if_exists="append", index=False, method="multi", chunksize=100)
+        sb_cs, runs = proc_sb_cs_runs(proc_df)
+        if not sqlalchemy.inspect(engine).has_table("baserunning"):
+            query = text(pd.io.sql.get_schema(sb_cs, 'baserunning'))    # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        if not sqlalchemy.inspect(engine).has_table("pitching_runs"):
+            query = text(pd.io.sql.get_schema(runs, 'pitching_runs'))   # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        if not sqlalchemy.inspect(engine).has_table("cwgame"):
+            query = text(pd.io.sql.get_schema(years_cwgame[year], 'cwgame'))    # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        # Save the baserunning and runs DataFrames to SQL
+        sb_cs_table = sqlalchemy.Table("baserunning", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_baserunning = sb_cs_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_baserunning, sb_cs.to_dict(orient="records"))   # type: ignore
+        runs_table = sqlalchemy.Table("pitching_runs", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_runs = runs_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_runs, runs.to_dict(orient="records"))   # type: ignore
+        # Save the cwgame DataFrame to SQL
+        cwgame_table = sqlalchemy.Table("cwgame", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_cwgame = cwgame_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_cwgame, years_cwgame[year].to_dict(orient="records"))   # type: ignore
+        # sb_cs.to_sql("baserunning", engine, if_exists="append", index=False, method="multi")
+        # runs.to_sql("pitching_runs", engine, if_exists="append", index=False, method="multi")
+        # years_cwgame[year].to_sql("cwgame", engine, if_exists="append", index=False, method="multi")
 
     # Delete Chadwick CSVs
     for child in outdir.iterdir():
@@ -166,4 +208,78 @@ def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
     )
 
     df["MLB_STATSAPI_APPROX"] = statsapi_approx
+
+    df["year"] = df["GAME_ID"].str.slice(3, 7).astype(int)  # type: ignore
+    df["month"] = df["GAME_ID"].str.slice(7, 9).astype(int)  # type: ignore
+    df["day"] = df["GAME_ID"].str.slice(9, 11).astype(int)  # type: ignore
+
+    df["file_index"] = df.index
+    df = df.reset_index(drop=True)
     return df
+
+def proc_sb_cs_runs(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    Process stolen bases, caught stealing, and earned runs and return two separate dataframes (one with baserunning and one with earned runs).
+    """
+    stolen_first = df[df["RUN1_SB_FL"] != 0].copy()
+    stolen_first["RESP_BAT_ID"] = stolen_first["BASE1_RUN_ID"]
+    stolen_second = df[df["RUN2_SB_FL"] != 0].copy()
+    stolen_second["RESP_BAT_ID"] = stolen_second["BASE2_RUN_ID"]
+    stolen_third = df[df["RUN3_SB_FL"] != 0].copy()
+    stolen_third["RESP_BAT_ID"] = stolen_third["BASE3_RUN_ID"]
+    # Remove all other values (stats, etc) from the stolen bases events
+    stolen_first = stolen_first[["file_index", "RESP_BAT_ID", "GAME_ID"]]
+    stolen_second = stolen_second[["file_index", "RESP_BAT_ID", "GAME_ID"]]
+    stolen_third = stolen_third[["file_index", "RESP_BAT_ID", "GAME_ID"]]
+
+    # Set SB to 1 for the stolen bases events
+    stolen_first["SB_indiv"] = 1
+    stolen_second["SB_indiv"] = 1
+    stolen_third["SB_indiv"] = 1
+
+    # Do the same for CS
+    caught_first = df[df["RUN1_CS_FL"] != 0].copy()
+    caught_first["RESP_BAT_ID"] = caught_first["BASE1_RUN_ID"]
+    caught_second = df[df["RUN2_CS_FL"] != 0].copy()
+    caught_second["RESP_BAT_ID"] = caught_second["BASE2_RUN_ID"]
+    caught_third = df[df["RUN3_CS_FL"] != 0].copy()
+    caught_third["RESP_BAT_ID"] = caught_third["BASE3_RUN_ID"]
+    # Remove all other values (stats, etc) from the CS events
+    caught_first = caught_first[["file_index", "RESP_BAT_ID", "GAME_ID"]]
+    caught_second = caught_second[["file_index", "RESP_BAT_ID", "GAME_ID"]]
+    caught_third = caught_third[["file_index", "RESP_BAT_ID", "GAME_ID"]]
+    # Set CS to 1 for the stolen bases events
+    caught_first["CS_indiv"] = 1
+    caught_second["CS_indiv"] = 1
+    caught_third["CS_indiv"] = 1
+
+
+    # Process run allowed events
+    run_score_0 = df[df["BAT_DEST_ID"] >= 4].copy()
+    run_score_1 = df[df["RUN1_DEST_ID"] >= 4].copy()
+    run_score_2 = df[df["RUN2_DEST_ID"] >= 4].copy()
+    run_score_3 = df[df["RUN3_DEST_ID"] >= 4].copy()
+    # Set the RESP_PIT_ID to the pitcher that is responsible for the run
+    run_score_1["RESP_PIT_ID"] = run_score_1["RUN1_RESP_PIT_ID"]
+    run_score_2["RESP_PIT_ID"] = run_score_2["RUN2_RESP_PIT_ID"]
+    run_score_3["RESP_PIT_ID"] = run_score_3["RUN3_RESP_PIT_ID"]
+    # Remove all other values (stats, etc) from the run scoring events
+    run_score_0 = run_score_0[["file_index", "RESP_PIT_ID", "GAME_ID", "BAT_DEST_ID", "RUN1_DEST_ID", "RUN2_DEST_ID", "RUN3_DEST_ID"]]
+    run_score_1 = run_score_1[["file_index", "RESP_PIT_ID", "GAME_ID", "BAT_DEST_ID", "RUN1_DEST_ID", "RUN2_DEST_ID", "RUN3_DEST_ID"]]
+    run_score_2 = run_score_2[["file_index", "RESP_PIT_ID", "GAME_ID", "BAT_DEST_ID", "RUN1_DEST_ID", "RUN2_DEST_ID", "RUN3_DEST_ID"]]
+    run_score_3 = run_score_3[["file_index", "RESP_PIT_ID", "GAME_ID", "BAT_DEST_ID", "RUN1_DEST_ID", "RUN2_DEST_ID", "RUN3_DEST_ID"]]
+    # Set R, ER, and UER to 1 for the run scoring events
+    run_score_0["R_indiv"] = 1
+    run_score_1["R_indiv"] = 1
+    run_score_2["R_indiv"] = 1
+    run_score_3["R_indiv"] = 1
+    run_score_0.loc[run_score_0["BAT_DEST_ID"].isin((4, 6)), "ER_indiv"] = 1
+    run_score_0.loc[run_score_0["BAT_DEST_ID"].isin((5, 7)), "UER_indiv"] = 1
+    run_score_1.loc[run_score_1["RUN1_DEST_ID"].isin((4, 6)), "ER_indiv"] = 1
+    run_score_1.loc[run_score_1["RUN1_DEST_ID"].isin((5, 7)), "UER_indiv"] = 1
+    run_score_2.loc[run_score_2["RUN2_DEST_ID"].isin((4, 6)), "ER_indiv"] = 1
+    run_score_2.loc[run_score_2["RUN2_DEST_ID"].isin((5, 7)), "UER_indiv"] = 1
+    run_score_3.loc[run_score_3["RUN3_DEST_ID"].isin((4, 6)), "ER_indiv"] = 1
+    run_score_3.loc[run_score_3["RUN3_DEST_ID"].isin((5, 7)), "UER_indiv"] = 1
+
+    return (pd.concat([stolen_first, stolen_second, stolen_third, caught_first, caught_second, caught_third])), pd.concat([run_score_0, run_score_1, run_score_2, run_score_3])
