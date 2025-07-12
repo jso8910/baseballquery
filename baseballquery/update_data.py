@@ -6,6 +6,11 @@ from . import utils
 from . import download
 from . import retrosheet_cwevent_convert
 from . import linear_weights
+from .database import engine
+from .retrosheet_cwevent_convert import proc_sb_cs_runs
+import sqlalchemy
+import pandas as pd
+from sqlalchemy import text
 
 
 def set_first_data_year(year):
@@ -29,6 +34,16 @@ def update_data(redownload=False):
     if redownload:
         print("Redownloading all data...")
         delete_data()
+
+    # Delete all files in ~/.baseballquery/downloads and ~/.baseballquery/chadwick
+    downloads_dir = Path("~/.baseballquery/downloads").expanduser()
+    chadwick_dir = Path("~/.baseballquery/chadwick").expanduser()
+    if downloads_dir.exists():
+        for file in downloads_dir.iterdir():
+            file.unlink()
+    if chadwick_dir.exists():
+        for file in chadwick_dir.iterdir():
+            file.unlink()
         
     print("Updating data...")
     data_dir = Path("~/.baseballquery").expanduser()
@@ -75,7 +90,8 @@ def update_data(redownload=False):
 
     if years_missing_weights:
         print(f"Generating linear weights...")
-        linear_weights.calc_weights(years_list=years_missing_weights)
+        linear_weights.calc_linear_weights_from_db(years_list=years_missing_weights)
+        # linear_weights.calc_weights(years_list=years_missing_weights)
 
     # Check the schedule for the current year
     if datetime.now().year > END_YEAR:
@@ -85,6 +101,50 @@ def update_data(redownload=False):
         if df is None:
             return
         df_proc = retrosheet_cwevent_convert.process_df(df[0], statsapi_approx=True)
-        df_proc.to_feather(utils.get_year_path(year))
-        df[1].to_feather(utils.get_year_cwgame_path(year))
-        linear_weights.calc_weights(years_list=[year])
+
+        if not sqlalchemy.inspect(engine).has_table("events"):
+            query = text(pd.io.sql.get_schema(df, 'events'))  # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        # Save the processed DataFrame to SQL
+        events_table = sqlalchemy.Table("events", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_events = events_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_events, df_proc.to_dict(orient="records"))  # type: ignore
+        sb_cs, runs = proc_sb_cs_runs(df_proc)
+        if not sqlalchemy.inspect(engine).has_table("baserunning"):
+            query = text(pd.io.sql.get_schema(sb_cs, 'baserunning'))    # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        if not sqlalchemy.inspect(engine).has_table("pitching_runs"):
+            query = text(pd.io.sql.get_schema(runs, 'pitching_runs'))   # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        if not sqlalchemy.inspect(engine).has_table("cwgame"):
+            query = text(pd.io.sql.get_schema(df[1], 'cwgame'))    # type: ignore
+            with engine.begin() as conn:
+                conn.execute(query)
+        # Save the baserunning and runs DataFrames to SQL
+        sb_cs_table = sqlalchemy.Table("baserunning", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_baserunning = sb_cs_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_baserunning, sb_cs.to_dict(orient="records"))   # type: ignore
+        runs_table = sqlalchemy.Table("pitching_runs", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_runs = runs_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_runs, runs.to_dict(orient="records"))   # type: ignore
+        # Save the cwgame DataFrame to SQL
+        cwgame_table = sqlalchemy.Table("cwgame", sqlalchemy.MetaData(), autoload_with=engine)
+        insert_cwgame = cwgame_table.insert()
+        with engine.begin() as conn:
+            conn.execute(insert_cwgame, df[1].to_dict(orient="records"))   # type: ignore
+        linear_weights.calc_linear_weights_from_db(years_list=[year])
+
+    # Update years.txt file
+    if not sqlalchemy.inspect(engine).has_table("events"):
+        return []
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT DISTINCT year FROM events"))
+        years = [row[0] for row in result.fetchall()]
+    with open(data_dir / "years.txt", "w") as f:
+        f.write("\n".join(map(str, sorted(years))))
