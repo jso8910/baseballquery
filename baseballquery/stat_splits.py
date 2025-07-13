@@ -26,7 +26,7 @@ class StatSplits:
         self.split = "year"
         self.find = "player"
         self.sql_query_where = defaultdict(str)
-        self.sql_query_where["year"] = f"{start_year} <= year AND year <= {end_year}"
+        self.sql_query_where["year"] = f"{start_year} <= events.year AND events.year <= {end_year}"
 
     def set_split(self, split: str):
         """

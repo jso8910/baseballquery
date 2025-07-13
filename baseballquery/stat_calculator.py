@@ -155,15 +155,15 @@ class BattingStatsCalculator(StatCalculator):
 
         if self.split == "year":
             query_select = """
-            MIN(year) as year,
+            MIN(events.year) as year,
             NULL as month,
             NULL as day,
             NULL as game_id,
             """
         elif self.split == "month":
             query_select = """
-            MIN(year) as year,
-            MIN(month) as month,
+            MIN(events.year) as year,
+            MIN(events.month) as month,
             NULL as day,
             NULL as game_id,
             """
@@ -176,17 +176,17 @@ class BattingStatsCalculator(StatCalculator):
             """
         elif self.split == "day":
             query_select = """
-            MIN(year) as year,
-            MIN(month) as month,
-            MIN(day) as day,
+            MIN(events.year) as year,
+            MIN(events.month) as month,
+            MIN(events.day) as day,
             NULL as game_id,
             """
         elif self.split == "game":
             query_select = """
-            MIN(year) as year,
-            MIN(month) as month,
-            MIN(day) as day,
-            MIN(GAME_ID) as game_id,
+            MIN(events.year) as year,
+            MIN(events.month) as month,
+            MIN(events.day) as day,
+            MIN(events.GAME_ID) as game_id,
             """
         else:
             raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
@@ -205,8 +205,8 @@ class BattingStatsCalculator(StatCalculator):
         query = f"""
         SELECT
             {query_select}
-            min(year) as start_year,
-            max(year) as end_year,
+            min(events.year) as start_year,
+            max(events.year) as end_year,
             COUNT(DISTINCT events.GAME_ID) AS G, 
             SUM(events.PA) AS PA,
             SUM(events.AB) AS AB,
@@ -235,7 +235,8 @@ class BattingStatsCalculator(StatCalculator):
             SUM(events.PU) AS PU
         FROM events
         LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
-        WHERE {self.query_where}
+        WHERE
+            {self.query_where}
         GROUP BY {", ".join(to_group_by)}
         """
         # Just for data display purposes
@@ -251,6 +252,9 @@ class BattingStatsCalculator(StatCalculator):
 
         # Separate query for SB and CS if find is player
         if self.find == "player":
+            # The baserunning table's RESP_BAT_ID is NOT the same as events.RESP_BAT_ID (baserunner is not the same as the real batter)
+            # I probably shouldn't have used RESP_BAT_ID in this table, but it comes from when I did this a different way with Pandas
+            # So, these two lines are both VERY important
             to_group_original.append("baserunning.RESP_BAT_ID")
             query_select = query_select.replace("events.RESP_BAT_ID", "baserunning.RESP_BAT_ID")
             query_baserunning = f"""
@@ -422,29 +426,29 @@ class PitchingStatsCalculator(StatCalculator):
             to_group_by.append("events.FLD_TEAM_ID")
 
         if self.split == "year":
-            to_group_by.append("year")
+            to_group_by.append("events.year")
         elif self.split == "month":
-            to_group_by.append("year")
-            to_group_by.append("month")
+            to_group_by.append("events.year")
+            to_group_by.append("events.month")
         elif self.split == "day":
-            to_group_by.append("year")
-            to_group_by.append("month")
-            to_group_by.append("day")
+            to_group_by.append("events.year")
+            to_group_by.append("events.month")
+            to_group_by.append("events.day")
         elif self.split == "game":
-            to_group_by.append("GAME_ID")
+            to_group_by.append("events.GAME_ID")
 
         # Create a row for each player grouping
         if self.split == "year":
             query_select = """
-            MIN(year) as year,
+            MIN(events.year) as year,
             NULL as month,
             NULL as day,
             NULL as game_id,
             """
         elif self.split == "month":
             query_select = """
-            MIN(year) as year,
-            MIN(month) as month,
+            MIN(events.year) as year,
+            MIN(events.month) as month,
             NULL as day,
             NULL as game_id,
             """
@@ -457,17 +461,17 @@ class PitchingStatsCalculator(StatCalculator):
             """
         elif self.split == "day":
             query_select = """
-            MIN(year) as year,
-            MIN(month) as month,
-            MIN(day) as day,
+            MIN(events.year) as year,
+            MIN(events.month) as month,
+            MIN(events.day) as day,
             NULL as game_id,
             """
         elif self.split == "game":
             query_select = """
-            MIN(year) as year,
-            MIN(month) as month,
-            MIN(day) as day,
-            MIN(GAME_ID) as game_id,
+            MIN(events.year) as year,
+            MIN(events.month) as month,
+            MIN(events.day) as day,
+            MIN(events.GAME_ID) as game_id,
             """
         else:
             raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
@@ -530,10 +534,15 @@ class PitchingStatsCalculator(StatCalculator):
             to_group_original.remove("events.RESP_PIT_ID")
             to_group_by.remove("events.RESP_PIT_ID")
             to_group_by.append("player_id")
+        for idx, item in enumerate(to_group_by):
+            if item.startswith("events."):
+                to_group_by[idx] = item.split(".")[-1]
         df = pd.read_sql(query, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])  # type: ignore
 
         # Separate query for R, UER, ER if find is player
         if self.find == "player":
+            # The pitching runs table's RESP_PIT_ID is NOT the same as events.RESP_PIT_ID (baserunner is not the same as the real batter)
+            # I probably shouldn't have used RESP_PIT_ID in this table, but it comes from when I did this a different way with Pandas
             to_group_original.append("pitching_runs.RESP_PIT_ID")
             query_select = query_select.replace("events.RESP_PIT_ID", "pitching_runs.RESP_PIT_ID")
             query_run_scoring = f"""

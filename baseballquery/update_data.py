@@ -8,6 +8,7 @@ from . import retrosheet_cwevent_convert
 from . import linear_weights
 from .database import engine
 from .retrosheet_cwevent_convert import proc_sb_cs_runs
+from .migrations import create_tables
 import sqlalchemy
 import pandas as pd
 from sqlalchemy import text
@@ -34,6 +35,8 @@ def update_data(redownload=False):
     if redownload:
         print("Redownloading all data...")
         delete_data()
+
+    create_tables()
 
     # Delete all files in ~/.baseballquery/downloads and ~/.baseballquery/chadwick
     downloads_dir = Path("~/.baseballquery/downloads").expanduser()
