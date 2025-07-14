@@ -5,28 +5,33 @@ from collections import defaultdict
 
 
 class StatSplits:
-    def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
+    def __init__(self, start_year: int = 0, end_year: int = 0, years_list: list[int] | None = None, events: pd.DataFrame | None = None):
         """
         Parent class. Should not be instantiated directly
         """
 
         self.linear_weights = get_linear_weights()  # type: ignore
+        self.sql_query_where = defaultdict(str)
 
         years = get_years()
-        if start_year not in years:
-            raise ValueError(
-                f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?"
-            )
-        if end_year not in years:
-            raise ValueError(
-                f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()"
-            )
+        if years_list is not None:
+            all_years = set(years_list)
+            years = [year for year in years if year in all_years]
+            self.sql_query_where["year"] = f"events.year IN ({', '.join([str(year) for year in years])})"
+        else:
+            if start_year not in years:
+                raise ValueError(
+                    f"Start year {start_year} not found in database. Did you remember to run baseballquery.update_data()?"
+                )
+            if end_year not in years:
+                raise ValueError(
+                    f"End year {end_year} not found in database. Did you remember to run baseballquery.update_data()"
+                )
+            self.sql_query_where["year"] = f"{start_year} <= events.year AND events.year <= {end_year}"
 
-        self.stats: pd.DataFrame | None = None
+        self.stats: pd.DataFrame = pd.DataFrame()
         self.split = "year"
         self.find = "player"
-        self.sql_query_where = defaultdict(str)
-        self.sql_query_where["year"] = f"{start_year} <= events.year AND events.year <= {end_year}"
 
     def set_split(self, split: str):
         """
@@ -285,11 +290,11 @@ class StatSplits:
 
 
 class BattingStatSplits(StatSplits):
-    def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
+    def __init__(self, start_year: int = 0, end_year: int = 0, years_list: list[int] | None = None, events: pd.DataFrame | None = None):
         """
         Class to calculate batting splits.
         """
-        super().__init__(start_year, end_year, events)
+        super().__init__(start_year, end_year, years_list=years_list, events=events)
         self.batting_calculator: BattingStatsCalculator | None = None
 
     def calculate_stats(self):
@@ -307,11 +312,11 @@ class BattingStatSplits(StatSplits):
 
 
 class PitchingStatSplits(StatSplits):
-    def __init__(self, start_year: int = 0, end_year: int = 0, events: pd.DataFrame | None = None):
+    def __init__(self, start_year: int = 0, end_year: int = 0, years_list: list[int] | None = None, events: pd.DataFrame | None = None):
         """
         Class to calculate pitching splits.
         """
-        super().__init__(start_year, end_year, events)
+        super().__init__(start_year, end_year, years_list=years_list, events=events)
         self.pitching_calculator: PitchingStatsCalculator | None = None
 
     def calculate_stats(self):
