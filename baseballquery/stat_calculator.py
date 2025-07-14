@@ -193,7 +193,7 @@ class BattingStatsCalculator(StatCalculator):
         if self.find == "player":
             query_select = """
             MIN(events.RESP_BAT_ID) as player_id,
-            NULL as team,
+            CASE WHEN COUNT(DISTINCT events.BAT_TEAM_ID) = 1 THEN MIN(events.BAT_TEAM_ID) ELSE COUNT(DISTINCT events.BAT_TEAM_ID) || " Teams" END as team,
             """ + query_select
         elif self.find == "team":
             query_select = """
@@ -270,11 +270,12 @@ class BattingStatsCalculator(StatCalculator):
             """
             df_baserunning = pd.read_sql(query_baserunning, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the baserunning DataFrame with the main DataFrame
-            df = df.merge(df_baserunning, how="left", on=[elem.split(".")[-1] for elem in to_group_by])
+            df = df.merge(df_baserunning, how="left", on=["year", "player_id", "team", "month", "day", "game_id"])
+
         df["SB"] = df["SB"].fillna(0).astype(int)
         df["CS"] = df["CS"].fillna(0).astype(int)
 
-        self.stats = pd.DataFrame(df, columns=self.stats.columns)
+        self.stats = df.sort_values(by=[elem.split(".")[-1] for elem in to_group_by])
 
     @override
     def calculate_advanced_stats(self):
@@ -478,7 +479,7 @@ class PitchingStatsCalculator(StatCalculator):
         if self.find == "player":
             query_select = """
             MIN(events.RESP_PIT_ID) as player_id,
-            NULL as team,
+            CASE WHEN COUNT(DISTINCT events.FLD_TEAM_ID) = 1 THEN MIN(events.FLD_TEAM_ID) ELSE COUNT(DISTINCT events.FLD_TEAM_ID) || " Teams" END as team,
             """ + query_select
         elif self.find == "team":
             query_select = """
@@ -559,12 +560,12 @@ class PitchingStatsCalculator(StatCalculator):
             """
             df_run_scoring = pd.read_sql(query_run_scoring, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the run scoring DataFrame with the main DataFrame
-            df = df.merge(df_run_scoring, how="left", on=[elem.split(".")[-1] for elem in to_group_by])
+            df = df.merge(df_run_scoring, how="left", on=["year", "player_id", "team", "month", "day", "game_id"])
         df["R"] = df["R"].fillna(0).astype(int)
         df["ER"] = df["ER"].fillna(0).astype(int)
         df["UER"] = df["UER"].fillna(0).astype(int)
 
-        self.stats = pd.DataFrame(df, columns=self.stats.columns)
+        self.stats = df.sort_values(by=[elem.split(".")[-1] for elem in to_group_by])
 
     @override
     def calculate_advanced_stats(self):
