@@ -141,17 +141,17 @@ class StatSplits:
         """
         self.sql_query_where["pit_starter"] = f"events.RESP_PIT_START_FL = {str(starter).upper()}"
 
-    def set_batter_lineup_pos(self, lineup_pos: int):
+    def set_batter_lineup_pos(self, lineup_pos: list[int]):
         """
         Limit the data to only include plate appearances with batters who batted in a certain lineup position.
 
         Parameters:
         lineup_pos (int): 1-9 for lineup position
         """
-        assert 1 <= lineup_pos <= 9, "Invalid lineup position"
-        self.sql_query_where["bat_lineup_pos"] = f"events.BAT_LINEUP_ID = {lineup_pos}"
+        assert all(1 <= i <= 9 for i in lineup_pos), "Invalid lineup position"
+        self.sql_query_where["bat_lineup_pos"] = f"events.BAT_LINEUP_ID IN ({', '.join([str(pos) for pos in lineup_pos])})"
 
-    def set_player_field_position(self, field_pos: int):
+    def set_player_field_position(self, field_pos: list[int]):
         """
         Limit the data to only include plate appearances with players who played a certain field position.
 
@@ -159,8 +159,8 @@ class StatSplits:
         field_pos (int): 1-12 for field position.
             - 1-9 are the standard fielding positions, 10 is the DH, 11 is a pinch hitter, 12 is a pinch runner (this last one almost certainly will return 0 results)
         """
-        assert 1 <= field_pos <= 12, "Invalid field position"
-        self.sql_query_where["bat_fld_pos"] = f"events.BAT_FLD_CD = {field_pos}"
+        assert all(1 <= i <= 12 for i in field_pos), "Invalid field position"
+        self.sql_query_where["bat_fld_pos"] = f"events.BAT_FLD_CD IN ({', '.join([str(pos) for pos in field_pos])})"
 
     def set_batter_home(self, home: bool):
         """
