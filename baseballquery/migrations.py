@@ -122,6 +122,8 @@ def create_tables():
                             "day" INTEGER,
                             "file_index" INTEGER
                             );"""))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS year ON events(year);"))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS events_game_id ON events(game_id);"))
 
     if not sqlalchemy.inspect(engine).has_table("baserunning"):
         with engine.begin() as conn:
@@ -174,6 +176,7 @@ def create_tables():
                                 "SAVE_PIT_ID" TEXT
                             );
                             """))
+            conn.execute(text("CREATE INDEX IF NOT EXISTS cwgame_game_id ON cwgame(game_id);"))
 
     if not sqlalchemy.inspect(engine).has_table("linear_weights"):
         with engine.begin() as conn:

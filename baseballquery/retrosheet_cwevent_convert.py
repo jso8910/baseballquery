@@ -165,7 +165,7 @@ def get_counts_from_pitch_sequence(pitch_sequence):
         False, # 3-1
         False, # 3-2
     ]
-    for pitch in pitch_sequence:
+    for pitch in [c for c in pitch_sequence if c not in "+*.123>HNXY"]:
         if pitch in ['B', 'I', 'P', 'V']:  # Balls
             balls += 1
         elif pitch in ["A", "C", "K", "L", "M", "O", "Q", "S", "T"]:  # Strikes
@@ -173,8 +173,6 @@ def get_counts_from_pitch_sequence(pitch_sequence):
         elif pitch in ["F", "R"]:  # Fouls are strikes if less than 2 strikes
             if strikes < 2:
                 strikes += 1
-        elif pitch == 'X':  # Ball in play - end of at-bat for this sequence
-            break
         elif pitch == "U":  # Unknown pitch - ignore rest of sequence
             break
         if balls == 4 or strikes == 3:  # End of at-bat (walk or strikeout)
@@ -253,25 +251,14 @@ def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
     df["day"] = df["GAME_ID"].str.slice(9, 11).astype(int)  # type: ignore
 
     df["file_index"] = df.index
+    df = df.reset_index(drop=True)
     if not df["MLB_STATSAPI_APPROX"].any():
         # Process all counts which occurred during the PA
         if df["year"].iloc[0] < 1988:
             # For years before 1988, there is no pitch sequence data (or very spotty, so not worth including)
             df["counts"] = [[False] * 12] * len(df)
         else:
-            # If an event isn't a plate appearance (df["PA"] | df["PA_TRUNC_FL"]), its pitch seq should be prepended to the next PA
-            df["PA_previous"] = df["PA"].shift(1).fillna(0).astype(bool)  # type: ignore
-            df["PA_TRUNC_FL_previous"] = df["PA_TRUNC_FL"].shift(1).fillna(0).astype(bool)  # type: ignore
-            df["PITCH_SEQ_TX_previous"] = df["PITCH_SEQ_TX"].shift(1).fillna("")  # type: ignore
-            df["PITCH_SEQ_TX"] = df.apply(
-                lambda row: (
-                    row["PITCH_SEQ_TX_previous"] + row["PITCH_SEQ_TX"]
-                    if not (row["PA_previous"] or row["PA_TRUNC_FL_previous"])
-                    else row["PITCH_SEQ_TX"]
-                ),
-                axis=1,
-            )
-            df = df.drop(columns=["PA_previous", "PA_TRUNC_FL_previous", "PITCH_SEQ_TX_previous"])
+            df["PITCH_SEQ_TX"] = df["PITCH_SEQ_TX"].fillna("")
             df["counts"] = df.apply(lambda row: get_counts_from_pitch_sequence(row["PITCH_SEQ_TX"]), axis=1)  # type: ignore
 
         df["0-0"] = df["counts"].apply(lambda x: x[0])
@@ -287,7 +274,7 @@ def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
         df["3-1"] = df["counts"].apply(lambda x: x[10])
         df["3-2"] = df["counts"].apply(lambda x: x[11])
         df = df.drop(columns=["counts", "PITCH_SEQ_TX"])  # type: ignore
-    df = df.reset_index(drop=True)
+    # df = df.reset_index(drop=True)
     return df
 
 def proc_sb_cs_runs(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:

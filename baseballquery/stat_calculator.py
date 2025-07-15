@@ -191,10 +191,16 @@ class BattingStatsCalculator(StatCalculator):
         else:
             raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
         if self.find == "player":
-            query_select = """
-            MIN(events.RESP_BAT_ID) as player_id,
-            CASE WHEN COUNT(DISTINCT events.BAT_TEAM_ID) = 1 THEN MIN(events.BAT_TEAM_ID) ELSE COUNT(DISTINCT events.BAT_TEAM_ID) || " Teams" END as team,
-            """ + query_select
+            if self.split == "game":
+                query_select = """
+                MIN(events.RESP_BAT_ID) as player_id,
+                MIN(events.BAT_TEAM_ID) as team,
+                """ + query_select
+            else:
+                query_select = """
+                MIN(events.RESP_BAT_ID) as player_id,
+                CASE WHEN COUNT(DISTINCT events.BAT_TEAM_ID) = 1 THEN MIN(events.BAT_TEAM_ID) ELSE COUNT(DISTINCT events.BAT_TEAM_ID) || " Teams" END as team,
+                """ + query_select
         elif self.find == "team":
             query_select = """
             NULL as player_id,
@@ -248,6 +254,10 @@ class BattingStatsCalculator(StatCalculator):
             to_group_original.remove("events.RESP_BAT_ID")
             to_group_by.remove("events.RESP_BAT_ID")
             to_group_by.append("player_id")
+
+        if self.split == "game":
+            to_group_by.remove("events.GAME_ID")
+            to_group_by.append("events.game_id")
         df = pd.read_sql(query, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])  # type: ignore
 
         # Separate query for SB and CS if find is player
@@ -477,10 +487,16 @@ class PitchingStatsCalculator(StatCalculator):
         else:
             raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
         if self.find == "player":
-            query_select = """
-            MIN(events.RESP_PIT_ID) as player_id,
-            CASE WHEN COUNT(DISTINCT events.FLD_TEAM_ID) = 1 THEN MIN(events.FLD_TEAM_ID) ELSE COUNT(DISTINCT events.FLD_TEAM_ID) || " Teams" END as team,
-            """ + query_select
+            if self.split == "game":
+                query_select = """
+                MIN(events.RESP_PIT_ID) as player_id,
+                MIN(events.FLD_TEAM_ID) as team,
+                """ + query_select
+            else:
+                query_select = """
+                MIN(events.RESP_PIT_ID) as player_id,
+                CASE WHEN COUNT(DISTINCT events.FLD_TEAM_ID) = 1 THEN MIN(events.FLD_TEAM_ID) ELSE COUNT(DISTINCT events.FLD_TEAM_ID) || " Teams" END as team,
+                """ + query_select
         elif self.find == "team":
             query_select = """
             NULL as player_id,
@@ -535,6 +551,9 @@ class PitchingStatsCalculator(StatCalculator):
             to_group_original.remove("events.RESP_PIT_ID")
             to_group_by.remove("events.RESP_PIT_ID")
             to_group_by.append("player_id")
+        if self.split == "game":
+            to_group_by.remove("events.GAME_ID")
+            to_group_by.append("events.game_id")
         for idx, item in enumerate(to_group_by):
             if item.startswith("events."):
                 to_group_by[idx] = item.split(".")[-1]
