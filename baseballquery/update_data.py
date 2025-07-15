@@ -94,7 +94,6 @@ def update_data(redownload=False):
     if years_missing_weights:
         print(f"Generating linear weights...")
         linear_weights.calc_linear_weights_from_db(years_list=years_missing_weights)
-        # linear_weights.calc_weights(years_list=years_missing_weights)
 
     # Check the schedule for the current year
     if datetime.now().year > END_YEAR:

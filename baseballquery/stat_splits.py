@@ -249,15 +249,6 @@ class StatSplits:
         assert all(0 <= ball <= 4 for ball in balls), "Invalid number of balls"
         self.sql_query_where["balls_ct"] = f"events.BALLS_CT IN ({', '.join([str(ball) for ball in balls])})"
 
-    def set_score_diff(self, score_diff: list[int]):
-        """
-        Limit the data to only include PAs with a certain score difference (positive means home team is leading).
-
-        Parameters:
-        score_diff (list[int]): Any integer for the score difference
-        """
-        self.sql_query_where["score_diff"] = f"(events.HOME_SCORE_CT - events.AWAY_SCORE_CT) IN ({', '.join([str(diff) for diff in score_diff])})"
-
     def set_home_score(self, scores: list[int]):
         """
         Limit the data to only include PAs with a certain home team score.
@@ -310,6 +301,16 @@ class BattingStatSplits(StatSplits):
         self.batting_calculator.calculate_all_stats()
         self.stats = self.batting_calculator.stats
 
+    def set_score_diff(self, score_diff: list[int]):
+        """
+        Limit the data to only include PAs with a certain score difference (positive means batting team is leading).
+
+        Parameters:
+        score_diff (list[int]): Any integer for the score difference
+        """
+        assert all(isinstance(diff, int) for diff in score_diff), "Invalid score difference. Must be a list of integers."
+        self.sql_query_where["score_diff"] = f"CASE WHEN events.BAT_TEAM_ID = events.HOME_TEAM_ID THEN (events.HOME_SCORE_CT - events.AWAY_SCORE_CT) ELSE (events.AWAY_SCORE_CT - events.HOME_SCORE_CT) END IN ({', '.join([str(diff) for diff in score_diff])})"
+
 
 class PitchingStatSplits(StatSplits):
     def __init__(self, start_year: int = 0, end_year: int = 0, years_list: list[int] | None = None, events: pd.DataFrame | None = None):
@@ -331,3 +332,13 @@ class PitchingStatSplits(StatSplits):
         self.pitching_calculator = PitchingStatsCalculator(self.linear_weights, find=self.find, split=self.split, query_where=where_clause)  # type: ignore
         self.pitching_calculator.calculate_all_stats()
         self.stats = self.pitching_calculator.stats
+
+    def set_score_diff(self, score_diff: list[int]):
+        """
+        Limit the data to only include PAs with a certain score difference (positive means batting team is leading).
+
+        Parameters:
+        score_diff (list[int]): Any integer for the score difference
+        """
+        assert all(isinstance(diff, int) for diff in score_diff), "Invalid score difference. Must be a list of integers."
+        self.sql_query_where["score_diff"] = f"CASE WHEN events.FLD_TEAM_ID = events.HOME_TEAM_ID THEN (events.HOME_SCORE_CT - events.AWAY_SCORE_CT) ELSE (events.AWAY_SCORE_CT - events.HOME_SCORE_CT) END IN ({', '.join([str(diff) for diff in score_diff])})"

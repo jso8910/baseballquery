@@ -58,6 +58,52 @@ class ParsePlateAppearance:
         self.event_types_list = event_types_list
 
     def parse(self) -> None:
+        # Set all counts
+        counts: list[bool] = [
+            True, # 0-0
+            False, # 0-1
+            False, # 0-2
+            False, # 1-0
+            False, # 1-1
+            False, # 1-2
+            False, # 2-0
+            False, # 2-1
+            False, # 2-2
+            False, # 3-0
+            False, # 3-1
+            False, # 3-2
+        ]
+        for pitch in self.plate_appearance["playEvents"]:
+            # event = self.plate_appearance["playEvents"][pitch]
+            if not pitch.get("count", None):
+                continue
+            count = pitch["count"]
+            count_tup = (count["balls"], count["strikes"])
+            # I have to do it this way because the counts include 3 strikes and 4 balls... sigh
+            if count_tup == (0, 0):
+                counts[0] = True
+            elif count_tup == (0, 1):
+                counts[1] = True
+            elif count_tup == (0, 2):
+                counts[2] = True
+            elif count_tup == (1, 0):
+                counts[3] = True
+            elif count_tup == (1, 1):
+                counts[4] = True
+            elif count_tup == (1, 2):
+                counts[5] = True
+            elif count_tup == (2, 0):
+                counts[6] = True
+            elif count_tup == (2, 1):
+                counts[7] = True
+            elif count_tup == (2, 2):
+                counts[8] = True
+            elif count_tup == (3, 0):
+                counts[9] = True
+            elif count_tup == (3, 1):
+                counts[10] = True
+            elif count_tup == (3, 2):
+                counts[11] = True
         event_type_to_cwevent = {
             "pickoff_1b": 8,
             "pickoff_2b": 8,

@@ -31,7 +31,7 @@ def convert_files_to_csv():
                         "cwevent",
                         "-q",
                         "-f",
-                        "0-2,4-6,8-9,12-13,16-17,26-28,32-34,36-45,47,58-61,66-77",
+                        "0-2,4-7,8-9,12-13,16-17,26-28,32-34,36-45,47,58-61,66-77",
                         "-x",
                         "0-2,12-14,16,20,33,38-39,44-45,50,55",
                         f"-y",
@@ -143,6 +143,48 @@ def convert_files_to_csv():
         child.unlink()
     download_dir.rmdir()
 
+def get_counts_from_pitch_sequence(pitch_sequence):
+    """
+    Parses a Retrosheet pitch sequence and returns a list of ball-strike counts.
+    """
+    if pd.isna(pitch_sequence) or pitch_sequence == "":
+        return [False] * 12
+    # Strikes: A C K L M O Q S T
+    # Fouls: F R
+    # Balls: B I P V
+    balls = 0
+    strikes = 0
+    counts = [
+        True, # 0-0
+        False, # 0-1
+        False, # 0-2
+        False, # 1-0
+        False, # 1-1
+        False, # 1-2
+        False, # 2-0
+        False, # 2-1
+        False, # 2-2
+        False, # 3-0
+        False, # 3-1
+        False, # 3-2
+    ]
+    for pitch in pitch_sequence:
+        if pitch in ['B', 'I', 'P', 'V']:  # Balls
+            balls += 1
+        elif pitch in ["A", "C", "K", "L", "M", "O", "Q", "S", "T"]:  # Strikes
+            strikes += 1
+        elif pitch in ["F", "R"]:  # Fouls are strikes if less than 2 strikes
+            if strikes < 2:
+                strikes += 1
+        elif pitch == 'X':  # Ball in play - end of at-bat for this sequence
+            break
+        elif pitch == "U":  # Unknown pitch - ignore rest of sequence
+            break
+        if balls == 4 or strikes == 3:  # End of at-bat (walk or strikeout)
+            break
+        counts[balls * 3 + strikes] = True  # Set the count for the current balls-strikes combination
+        # Reset for next at-bat if X encountered, or handle other scenarios as needed
+    return counts
 
 def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
     baserunning_outcomes_not_pa: list[int] = [4, 5, 6, 7, 8, 9, 10, 11, 12]
@@ -214,6 +256,26 @@ def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
     df["day"] = df["GAME_ID"].str.slice(9, 11).astype(int)  # type: ignore
 
     df["file_index"] = df.index
+    # Process all counts which occurred during the PA
+    if df["year"].iloc[0] < 1988:
+        # For years before 1988, there is no pitch sequence data (or very spotty, so not worth including)
+        df["counts"] = [[False] * 12] * len(df)
+    else:
+        df["counts"] = df.apply(lambda row: get_counts_from_pitch_sequence(row["PITCH_SEQ_TX"]), axis=1)  # type: ignore
+
+    df["0-0"] = df["counts"].apply(lambda x: x[0])
+    df["0-1"] = df["counts"].apply(lambda x: x[1])
+    df["0-2"] = df["counts"].apply(lambda x: x[2])
+    df["1-0"] = df["counts"].apply(lambda x: x[3])
+    df["1-1"] = df["counts"].apply(lambda x: x[4])
+    df["1-2"] = df["counts"].apply(lambda x: x[5])
+    df["2-0"] = df["counts"].apply(lambda x: x[6])
+    df["2-1"] = df["counts"].apply(lambda x: x[7])
+    df["2-2"] = df["counts"].apply(lambda x: x[8])
+    df["3-0"] = df["counts"].apply(lambda x: x[9])
+    df["3-1"] = df["counts"].apply(lambda x: x[10])
+    df["3-2"] = df["counts"].apply(lambda x: x[11])
+    df = df.drop(columns=["counts", "PITCH_SEQ_TX"])  # type: ignore
     df = df.reset_index(drop=True)
     return df
 
