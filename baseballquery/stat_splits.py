@@ -130,7 +130,7 @@ class StatSplits:
         Parameters:
         starter (bool): True for starters, False for non-starters
         """
-        self.sql_query_where["bat_starter"] = f"events.RESP_BAT_START_FL = {str(starter).upper()}"
+        self.sql_query_where["bat_starter"] = f"events.RESP_BAT_START_FL = '{str(starter).upper()}'"
 
     def set_pitcher_starter(self, starter: bool):
         """
@@ -139,7 +139,7 @@ class StatSplits:
         Parameters:
         starter (bool): True for starters, False for non-starters
         """
-        self.sql_query_where["pit_starter"] = f"events.RESP_PIT_START_FL = {str(starter).upper()}"
+        self.sql_query_where["pit_starter"] = f"events.RESP_PIT_START_FL = '{str(starter).upper()}'"
 
     def set_batter_lineup_pos(self, lineup_pos: list[int]):
         """
