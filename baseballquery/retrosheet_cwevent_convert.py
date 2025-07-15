@@ -129,9 +129,6 @@ def convert_files_to_csv():
         insert_cwgame = cwgame_table.insert()
         with engine.begin() as conn:
             conn.execute(insert_cwgame, years_cwgame[year].to_dict(orient="records"))   # type: ignore
-        # sb_cs.to_sql("baserunning", engine, if_exists="append", index=False, method="multi")
-        # runs.to_sql("pitching_runs", engine, if_exists="append", index=False, method="multi")
-        # years_cwgame[year].to_sql("cwgame", engine, if_exists="append", index=False, method="multi")
 
     # Delete Chadwick CSVs
     for child in outdir.iterdir():
@@ -256,26 +253,40 @@ def process_df(df: pd.DataFrame, statsapi_approx=False) -> pd.DataFrame:
     df["day"] = df["GAME_ID"].str.slice(9, 11).astype(int)  # type: ignore
 
     df["file_index"] = df.index
-    # Process all counts which occurred during the PA
-    if df["year"].iloc[0] < 1988:
-        # For years before 1988, there is no pitch sequence data (or very spotty, so not worth including)
-        df["counts"] = [[False] * 12] * len(df)
-    else:
-        df["counts"] = df.apply(lambda row: get_counts_from_pitch_sequence(row["PITCH_SEQ_TX"]), axis=1)  # type: ignore
+    if not df["MLB_STATSAPI_APPROX"].any():
+        # Process all counts which occurred during the PA
+        if df["year"].iloc[0] < 1988:
+            # For years before 1988, there is no pitch sequence data (or very spotty, so not worth including)
+            df["counts"] = [[False] * 12] * len(df)
+        else:
+            # If an event isn't a plate appearance (df["PA"] | df["PA_TRUNC_FL"]), its pitch seq should be prepended to the next PA
+            df["PA_previous"] = df["PA"].shift(1).fillna(0).astype(bool)  # type: ignore
+            df["PA_TRUNC_FL_previous"] = df["PA_TRUNC_FL"].shift(1).fillna(0).astype(bool)  # type: ignore
+            df["PITCH_SEQ_TX_previous"] = df["PITCH_SEQ_TX"].shift(1).fillna("")  # type: ignore
+            df["PITCH_SEQ_TX"] = df.apply(
+                lambda row: (
+                    row["PITCH_SEQ_TX_previous"] + row["PITCH_SEQ_TX"]
+                    if not (row["PA_previous"] or row["PA_TRUNC_FL_previous"])
+                    else row["PITCH_SEQ_TX"]
+                ),
+                axis=1,
+            )
+            df = df.drop(columns=["PA_previous", "PA_TRUNC_FL_previous", "PITCH_SEQ_TX_previous"])
+            df["counts"] = df.apply(lambda row: get_counts_from_pitch_sequence(row["PITCH_SEQ_TX"]), axis=1)  # type: ignore
 
-    df["0-0"] = df["counts"].apply(lambda x: x[0])
-    df["0-1"] = df["counts"].apply(lambda x: x[1])
-    df["0-2"] = df["counts"].apply(lambda x: x[2])
-    df["1-0"] = df["counts"].apply(lambda x: x[3])
-    df["1-1"] = df["counts"].apply(lambda x: x[4])
-    df["1-2"] = df["counts"].apply(lambda x: x[5])
-    df["2-0"] = df["counts"].apply(lambda x: x[6])
-    df["2-1"] = df["counts"].apply(lambda x: x[7])
-    df["2-2"] = df["counts"].apply(lambda x: x[8])
-    df["3-0"] = df["counts"].apply(lambda x: x[9])
-    df["3-1"] = df["counts"].apply(lambda x: x[10])
-    df["3-2"] = df["counts"].apply(lambda x: x[11])
-    df = df.drop(columns=["counts", "PITCH_SEQ_TX"])  # type: ignore
+        df["0-0"] = df["counts"].apply(lambda x: x[0])
+        df["0-1"] = df["counts"].apply(lambda x: x[1])
+        df["0-2"] = df["counts"].apply(lambda x: x[2])
+        df["1-0"] = df["counts"].apply(lambda x: x[3])
+        df["1-1"] = df["counts"].apply(lambda x: x[4])
+        df["1-2"] = df["counts"].apply(lambda x: x[5])
+        df["2-0"] = df["counts"].apply(lambda x: x[6])
+        df["2-1"] = df["counts"].apply(lambda x: x[7])
+        df["2-2"] = df["counts"].apply(lambda x: x[8])
+        df["3-0"] = df["counts"].apply(lambda x: x[9])
+        df["3-1"] = df["counts"].apply(lambda x: x[10])
+        df["3-2"] = df["counts"].apply(lambda x: x[11])
+        df = df.drop(columns=["counts", "PITCH_SEQ_TX"])  # type: ignore
     df = df.reset_index(drop=True)
     return df
 

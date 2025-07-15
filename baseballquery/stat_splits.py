@@ -70,6 +70,9 @@ class StatSplits:
         Parameters:
         days_of_week (list): List of days of the week to include. Valid values are "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"
         """
+        if len(days_of_week) == 0:
+            self.sql_query_where.pop("day_week", None)
+            return
         assert all(
             day.capitalize()
             in [
@@ -190,6 +193,9 @@ class StatSplits:
         Parameters:
         teams (list): List of team abbreviations (the retrosheet ones, e.g. "BOS", "NYA")
         """
+        if len(teams) == 0:
+            self.sql_query_where.pop("fld_team_id", None)
+            return
         assert all(len(team) == 3 for team in teams), "Invalid team abbreviation. Team abbreviations must be exactly 3 uppercase alphabetic characters."
         assert all(len(team) == 3 for team in teams), "Invalid team abbreviation"
         assert all(team.isupper() for team in teams), "Team abbreviations must be uppercase"
@@ -203,6 +209,9 @@ class StatSplits:
         Parameters:
         teams (list): List of team abbreviations (the retrosheet ones, e.g. "BOS", "NYA")
         """
+        if len(teams) == 0:
+            self.sql_query_where.pop("bat_team_id", None)
+            return
         assert all(len(team) == 3 for team in teams), "Invalid team abbreviation. Team abbreviations must be exactly 3 uppercase alphabetic characters."
         assert all(len(team) == 3 for team in teams), "Invalid team abbreviation"
         assert all(team.isupper() for team in teams), "Team abbreviations must be uppercase"
@@ -216,6 +225,9 @@ class StatSplits:
         Parameters:
         innings (list[int]): 1-infinity for the inning number
         """
+        if len(innings) == 0:
+            self.sql_query_where.pop("inn_ct", None)
+            return
         assert all(1 <= inning for inning in innings), "Invalid inning"
         self.sql_query_where["inn_ct"] = f"events.INN_CT IN ({', '.join([str(inning) for inning in innings])})"
 
@@ -226,26 +238,55 @@ class StatSplits:
         Parameters:
         outs (list[int]): 0-2 for the number of outs
         """
+        if len(outs) == 0:
+            self.sql_query_where.pop("outs_ct", None)
+            return
         assert all(0 <= out < 3 for out in outs), "Invalid number of outs"
         self.sql_query_where["outs_ct"] = f"events.OUTS_CT IN ({', '.join([str(out) for out in outs])})"
 
-    def set_strikes(self, strikes: list[int]):
+    def set_count(self, counts: list[str]):
+        """
+        Limit the data to only include PAs which contain certain counts.
+
+        Parameters:
+        count (list[str]): List of counts in the format "balls-strikes" (e.g. "0-0", "1-2", "3-2")
+        """
+        if len(counts) == 0:
+            self.sql_query_where.pop("count", None)
+            return
+        assert all(len(c) == 3 and c[1] == '-' for c in counts), "Invalid count format. Must be in the format 'balls-strikes' (e.g. '0-0', '1-2', '3-2')"
+        assert all(c[0].isdigit() and c[2].isdigit() for c in counts), "Invalid count format. Must be in the format 'balls-strikes' (e.g. '0-0', '1-2', '3-2')"
+        queries_count = []
+        for count in counts:
+            balls, strikes = count.split('-')
+            queries_count.append(f"events.\"{balls}-{strikes}\" = 1")
+        self.sql_query_where["count"] = f"({' OR '.join(queries_count)})"
+
+    def set_strikes_end(self, strikes: list[int]):
         """
         Limit the data to only include PAs that end with certain number of strikes (e.g. 3 for a strikeout, 1 for a hit on a 3-1 count).
+
+        With these functions, if you want to get at bats which ended on an 0-2 count, you would use set_strikes_end([2, 3]) and set_balls_end([0,]).
 
         Parameters:
         strikes (list[int]): 0-3 for the number of strikes
         """
+        if len(strikes) == 0:
+            self.sql_query_where.pop("strikes_ct", None)
+            return
         assert all(0 <= strike <= 3 for strike in strikes), "Invalid number of strikes"
         self.sql_query_where["strikes_ct"] = f"events.STRIKES_CT IN ({', '.join([str(strike) for strike in strikes])})"
 
-    def set_balls(self, balls: list[int]):
+    def set_balls_end(self, balls: list[int]):
         """
         Limit the data to only include PAs that end with certain number of balls (e.g. 4 for a walk, 3 for a hit on a 3-2 count).
 
         Parameters:
         balls (list[int]): 0-4 for the number of balls
         """
+        if len(balls) == 0:
+            self.sql_query_where.pop("balls_ct", None)
+            return
         assert all(0 <= ball <= 4 for ball in balls), "Invalid number of balls"
         self.sql_query_where["balls_ct"] = f"events.BALLS_CT IN ({', '.join([str(ball) for ball in balls])})"
 
@@ -256,6 +297,9 @@ class StatSplits:
         Parameters:
         scores (list[int]): Any integer for the home team score
         """
+        if len(scores) == 0:
+            self.sql_query_where.pop("home_score_ct", None)
+            return
         assert all(score >= 0 for score in scores), "Invalid home team score"
         self.sql_query_where["home_score_ct"] = f"events.HOME_SCORE_CT IN ({', '.join([str(score) for score in scores])})"
 
@@ -266,6 +310,9 @@ class StatSplits:
         Parameters:
         scores (list[int]): Any integer for the away team score
         """
+        if len(scores) == 0:
+            self.sql_query_where.pop("away_score_ct", None)
+            return
         assert all(score >= 0 for score in scores), "Invalid away team score"
         self.sql_query_where["away_score_ct"] = f"events.AWAY_SCORE_CT IN ({', '.join([str(score) for score in scores])})"
 
@@ -276,6 +323,9 @@ class StatSplits:
         Parameters:
         base_situation (list[int]): List of integers no more than 2^3 for the base situation. 0 is empty, 1 is occupied. For example, 0b111 = 7 = bases loaded, 0b000 = 0 = bases empty, 0b001 = 1 = runner on first, 0b100 = 4 = runner on third
         """
+        if len(base_situations) == 0:
+            self.sql_query_where.pop("start_bases_cd", None)
+            return
         assert all((0 <= base_situation < 8) for base_situation in base_situations), "Invalid base situation"  # type: ignore
         self.sql_query_where["start_bases_cd"] = f"events.START_BASES_CD IN ({', '.join([str(base_situation) for base_situation in base_situations])})"
 
@@ -308,6 +358,9 @@ class BattingStatSplits(StatSplits):
         Parameters:
         score_diff (list[int]): Any integer for the score difference
         """
+        if len(score_diff) == 0:
+            self.sql_query_where.pop("score_diff", None)
+            return
         assert all(isinstance(diff, int) for diff in score_diff), "Invalid score difference. Must be a list of integers."
         self.sql_query_where["score_diff"] = f"CASE WHEN events.BAT_TEAM_ID = events.HOME_TEAM_ID THEN (events.HOME_SCORE_CT - events.AWAY_SCORE_CT) ELSE (events.AWAY_SCORE_CT - events.HOME_SCORE_CT) END IN ({', '.join([str(diff) for diff in score_diff])})"
 
@@ -340,5 +393,8 @@ class PitchingStatSplits(StatSplits):
         Parameters:
         score_diff (list[int]): Any integer for the score difference
         """
+        if len(score_diff) == 0:
+            self.sql_query_where.pop("score_diff", None)
+            return
         assert all(isinstance(diff, int) for diff in score_diff), "Invalid score difference. Must be a list of integers."
         self.sql_query_where["score_diff"] = f"CASE WHEN events.FLD_TEAM_ID = events.HOME_TEAM_ID THEN (events.HOME_SCORE_CT - events.AWAY_SCORE_CT) ELSE (events.AWAY_SCORE_CT - events.HOME_SCORE_CT) END IN ({', '.join([str(diff) for diff in score_diff])})"

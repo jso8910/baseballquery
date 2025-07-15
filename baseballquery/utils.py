@@ -123,13 +123,22 @@ def get_year_events(year: int) -> pd.DataFrame:
                            FROM events JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID WHERE year = ?
                         """, conn, params=(year,))
 
-def get_year_path(year: int) -> Path:
-    data_dir = Path("~/.baseballquery").expanduser()
-    return data_dir / f"{year}.feather"
+def delete_year_events(year: int):
+    with engine.begin() as conn:
+        conn.execute(text(f"DELETE FROM baserunning WHERE baserunning.GAME_ID IN (SELECT events.GAME_ID FROM events WHERE year = {year})"))
+        conn.execute(text(f"DELETE FROM pitching_runs WHERE pitching_runs.GAME_ID IN (SELECT events.GAME_ID FROM events WHERE year = {year})"))
+        conn.execute(text(f"DELETE FROM cwgame WHERE cwgame.GAME_ID IN (SELECT events.GAME_ID FROM events WHERE year = {year})"))
+        conn.execute(text(f"DELETE FROM linear_weights WHERE year = {year}"))
+        conn.execute(text(f"DELETE FROM events WHERE year = {year}"))
 
-def get_year_cwgame_path(year: int) -> Path:
+    # Remove the year from the years.txt file
     data_dir = Path("~/.baseballquery").expanduser()
-    return data_dir / f"cwgame-{year}.feather"
+    if (data_dir / "years.txt").exists():
+        with open(data_dir / "years.txt", "r") as f:
+            years = f.read().splitlines()
+        years = [y for y in years if y != str(year)]
+        with open(data_dir / "years.txt", "w") as f:
+            f.write("\n".join(years))
 
 def get_years() -> list[int]:
     data_dir = Path("~/.baseballquery").expanduser()

@@ -74,8 +74,8 @@ def update_data(redownload=False):
         df = utils.get_year_events(last_year)
         if df["MLB_STATSAPI_APPROX"].any():
             print("Deleting and redownloading StatsAPI approximated year")
-            utils.get_year_path(last_year).unlink()
-            utils.get_year_cwgame_path(last_year).unlink()
+            # Delete data from SQL database in events, baserunning, pitching_runs, cwgame, and linear_weights
+            utils.delete_year_events(last_year)
             years_updated.append(last_year)
 
     if years_updated:
@@ -101,8 +101,16 @@ def update_data(redownload=False):
         year = datetime.now().year
         df = ParseSeason(year).parse()
         if df is None:
+            with engine.connect() as conn:
+                result = conn.execute(text("SELECT DISTINCT year FROM events"))
+                years = [row[0] for row in result.fetchall()]
+            with open(data_dir / "years.txt", "w") as f:
+                f.write("\n".join(map(str, sorted(years))))
             return
         df_proc = retrosheet_cwevent_convert.process_df(df[0], statsapi_approx=True)
+
+        # Delete existing data for the current year
+        utils.delete_year_events(year)
 
         if not sqlalchemy.inspect(engine).has_table("events"):
             query = text(pd.io.sql.get_schema(df, 'events'))  # type: ignore
@@ -143,8 +151,6 @@ def update_data(redownload=False):
         linear_weights.calc_linear_weights_from_db(years_list=[year])
 
     # Update years.txt file
-    if not sqlalchemy.inspect(engine).has_table("events"):
-        return []
     with engine.connect() as conn:
         result = conn.execute(text("SELECT DISTINCT year FROM events"))
         years = [row[0] for row in result.fetchall()]
