@@ -417,6 +417,10 @@ class PitchingStatsCalculator(StatCalculator):
             "wOBA",
             "HR/FB%",
             "LOB%",
+            "GB%",
+            "LD%",
+            "FB%",
+            "PU%",
         ]
         self.stats: pd.DataFrame = pd.DataFrame(columns=self.info_columns + self.basic_stat_columns + self.calculated_stat_columns)  # type: ignore
         dtypes_dict = {}
@@ -654,3 +658,15 @@ class PitchingStatsCalculator(StatCalculator):
             + stats_with_linear_weights["HR_lw"] * stats_with_linear_weights["HR"]
         ) / (self.stats["TBF"] - self.stats["IBB"])
         self.stats["HR/FB%"] = self.stats["HR"] / (self.stats["FB"] + self.stats["PU"])
+        self.stats["GB%"] = self.stats["GB"] / (
+            self.stats["GB"] + self.stats["LD"] + self.stats["FB"] + self.stats["PU"]
+        )
+        self.stats["LD%"] = self.stats["LD"] / (
+            self.stats["GB"] + self.stats["LD"] + self.stats["FB"] + self.stats["PU"]
+        )
+        self.stats["FB%"] = self.stats["FB"] / (
+            self.stats["GB"] + self.stats["LD"] + self.stats["FB"] + self.stats["PU"]
+        )
+        self.stats["PU%"] = self.stats["PU"] / (
+            self.stats["GB"] + self.stats["LD"] + self.stats["FB"] + self.stats["PU"]
+        )
