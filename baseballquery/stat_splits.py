@@ -335,7 +335,7 @@ class StatSplits:
         assert all((0 <= base_situation < 8) for base_situation in base_situations), "Invalid base situation"  # type: ignore
         self.sql_query_where["start_bases_cd"] = f"events.START_BASES_CD IN ({', '.join([str(base_situation) for base_situation in base_situations])})"
 
-    def stat_start_inning(self, home_team: str, conditions: list[dict], return_opposing_stats: bool = False):
+    def filter_stats_by_innings(self, home_team: str, conditions: list[dict], return_opposing_stats: bool = False):
         """
         Limit the data to only include games in which a certain stat is equal to a certain value at the start of a specific inning.
         Recommended to not be used with set_subdivision(player) as it will not have eg W/L records,
