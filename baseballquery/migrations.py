@@ -173,7 +173,10 @@ def create_tables():
                                 "MINUTES_GAME_CT" INTEGER,
                                 "WIN_PIT_ID" TEXT,
                                 "LOSE_PIT_ID" TEXT,
-                                "SAVE_PIT_ID" TEXT
+                                "SAVE_PIT_ID" TEXT,
+                                "FINAL_INN_CT" INTEGER,
+                                "FINAL_HOME_SCORE_CT" INTEGER,
+                                "FINAL_AWAY_SCORE_CT" INTEGER
                             );
                             """))
             conn.execute(text("CREATE INDEX IF NOT EXISTS cwgame_game_id ON cwgame(game_id);"))

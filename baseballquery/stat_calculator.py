@@ -12,6 +12,10 @@ class StatCalculator:
         find: str = "player",
         split: str = "year",
         query_where: str = "",
+        custom_column_where: str = "",
+        custom_cols: dict = {},
+        custom_select: str = "",
+        wins_included: bool = False,
     ):
         """
         Parent class for all stat calculators. This class should not be instantiated directly.
@@ -46,6 +50,10 @@ class StatCalculator:
         self.stats: pd.DataFrame = pd.DataFrame(columns=self.info_columns + self.basic_stat_columns + self.calculated_stat_columns)  # type: ignore
         self.stats_l = []
         self.query_where = query_where
+        self.custom_cols = custom_cols
+        self.custom_column_where = custom_column_where
+        self.custom_select = custom_select
+        self.wins_included = wins_included
 
     def calculate_all_stats(self):
         self.calculate_basic_stats()
@@ -66,16 +74,19 @@ class BattingStatsCalculator(StatCalculator):
         find: str = "player",
         split: str = "year",
         query_where: str = "",
+        custom_column_where: str = "",
+        custom_cols: dict = {},
+        custom_select: str = "",
+        wins_included: bool = False,
     ):
         """
         Args:
             events (pd.DataFrame): A Pandas DataFrame that contains the events data.
-            linear_weights (pd.DataFrame): A DataFrame that contains the linear weights for each event. Make sure that you have the linear weights for any year you're including in the events. If not, there will be an error.
+            linear_weights (pd.DataFrame): A DataFrame that contains the linear weights for each event. Make sure that you have the linear weights for any year you're including in the events_custom. If not, there will be an error.
             find (str): The split of the data. It can be "player" or "team".
             split (str): The split of the data. It can be "year", "month", "career", "day", or "game".
         """
-        # super().__init__(events, linear_weights, find, split)
-        super().__init__(linear_weights, find, split, query_where=query_where)
+        super().__init__(linear_weights, find, split, query_where=query_where, custom_column_where=custom_column_where, custom_cols=custom_cols, custom_select=custom_select, wins_included=wins_included)
         self.basic_stat_columns = [
             "G",
             "PA",
@@ -137,33 +148,33 @@ class BattingStatsCalculator(StatCalculator):
         # A list which contains the columns that are being grouped (based on split and find)
         to_group_by: list[str] = []
         if self.find == "player":
-            to_group_by.append("events.RESP_BAT_ID")
+            to_group_by.append("events_custom.RESP_BAT_ID")
         elif self.find == "team":
-            to_group_by.append("events.BAT_TEAM_ID")
+            to_group_by.append("events_custom.BAT_TEAM_ID")
 
         if self.split == "year":
-            to_group_by.append("events.year")
+            to_group_by.append("events_custom.year")
         elif self.split == "month":
-            to_group_by.append("events.year")
-            to_group_by.append("events.month")
+            to_group_by.append("events_custom.year")
+            to_group_by.append("events_custom.month")
         elif self.split == "day":
-            to_group_by.append("events.year")
-            to_group_by.append("events.month")
-            to_group_by.append("events.day")
+            to_group_by.append("events_custom.year")
+            to_group_by.append("events_custom.month")
+            to_group_by.append("events_custom.day")
         elif self.split == "game":
-            to_group_by.append("events.GAME_ID")
+            to_group_by.append("events_custom.GAME_ID")
 
         if self.split == "year":
             query_select = """
-            MIN(events.year) as year,
+            MIN(events_custom.year) as year,
             NULL as month,
             NULL as day,
             NULL as game_id,
             """
         elif self.split == "month":
             query_select = """
-            MIN(events.year) as year,
-            MIN(events.month) as month,
+            MIN(events_custom.year) as year,
+            MIN(events_custom.month) as month,
             NULL as day,
             NULL as game_id,
             """
@@ -176,114 +187,121 @@ class BattingStatsCalculator(StatCalculator):
             """
         elif self.split == "day":
             query_select = """
-            MIN(events.year) as year,
-            MIN(events.month) as month,
-            MIN(events.day) as day,
+            MIN(events_custom.year) as year,
+            MIN(events_custom.month) as month,
+            MIN(events_custom.day) as day,
             NULL as game_id,
             """
         elif self.split == "game":
             query_select = """
-            MIN(events.year) as year,
-            MIN(events.month) as month,
-            MIN(events.day) as day,
-            MIN(events.GAME_ID) as game_id,
+            MIN(events_custom.year) as year,
+            MIN(events_custom.month) as month,
+            MIN(events_custom.day) as day,
+            MIN(events_custom.GAME_ID) as game_id,
             """
         else:
             raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
         if self.find == "player":
             if self.split == "game":
                 query_select = """
-                MIN(events.RESP_BAT_ID) as player_id,
-                MIN(events.BAT_TEAM_ID) as team,
+                MIN(events_custom.RESP_BAT_ID) as player_id,
+                MIN(events_custom.BAT_TEAM_ID) as team,
                 """ + query_select
             else:
                 query_select = """
-                MIN(events.RESP_BAT_ID) as player_id,
-                CASE WHEN COUNT(DISTINCT events.BAT_TEAM_ID) = 1 THEN MIN(events.BAT_TEAM_ID) ELSE COUNT(DISTINCT events.BAT_TEAM_ID) || " Teams" END as team,
+                MIN(events_custom.RESP_BAT_ID) as player_id,
+                CASE WHEN COUNT(DISTINCT events_custom.BAT_TEAM_ID) = 1 THEN MIN(events_custom.BAT_TEAM_ID) ELSE COUNT(DISTINCT events_custom.BAT_TEAM_ID) || " Teams" END as team,
                 """ + query_select
         elif self.find == "team":
             query_select = """
             NULL as player_id,
-            MIN(events.BAT_TEAM_ID) as team,
+            MIN(events_custom.BAT_TEAM_ID) as team,
             """ + query_select
         else:
             raise ValueError(f"find must be 'player' or 'team', not '{self.find}'")
         query = f"""
+        WITH {", ".join([f"\"{alias}_cte\" AS ({col})" for alias, col in self.custom_cols.items()])}{", " if self.custom_cols else ""} events_custom AS (
+            SELECT events.*{", " + self.custom_select if self.custom_select else ""}
+            FROM events
+            LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
+            {" ".join([f"LEFT JOIN \"{alias}_cte\" ON \"{alias}_cte\".GAME_ID = events.GAME_ID" for alias, _ in self.custom_cols.items()])}
+            WHERE {self.query_where}{" AND " + self.custom_column_where if self.custom_column_where else ""}  -- Filter by query_where and custom_column_where
+        )
         SELECT
             {query_select}
-            min(events.year) as start_year,
-            max(events.year) as end_year,
-            COUNT(DISTINCT events.GAME_ID) AS G, 
-            SUM(events.PA) AS PA,
-            SUM(events.AB) AS AB,
-            SUM(events.H) AS H,
-            SUM(events."1B") AS "1B",
-            SUM(events."2B") AS "2B",
-            SUM(events."3B") AS "3B",
-            SUM(events.HR) AS HR,
-            SUM(events.UBB) AS UBB,
-            SUM(events.IBB) AS IBB,
-            SUM(events.HBP) AS HBP,
-            SUM(events.SF) AS SF,
-            SUM(events.SH) AS SH,
-            SUM(events.K) AS K,
-            SUM(events.DP) AS DP,
-            SUM(events.TP) AS TP,
+            min(events_custom.year) as start_year,
+            max(events_custom.year) as end_year,
+            {"count(DISTINCT events_custom.win)" if self.wins_included else "NULL"} as win,
+            {"count(DISTINCT events_custom.loss)" if self.wins_included else "NULL"} as loss,
+            COUNT(DISTINCT events_custom.GAME_ID) AS G, 
+            SUM(events_custom.PA) AS PA,
+            SUM(events_custom.AB) AS AB,
+            SUM(events_custom.H) AS H,
+            SUM(events_custom."1B") AS "1B",
+            SUM(events_custom."2B") AS "2B",
+            SUM(events_custom."3B") AS "3B",
+            SUM(events_custom.HR) AS HR,
+            SUM(events_custom.UBB) AS UBB,
+            SUM(events_custom.IBB) AS IBB,
+            SUM(events_custom.HBP) AS HBP,
+            SUM(events_custom.SF) AS SF,
+            SUM(events_custom.SH) AS SH,
+            SUM(events_custom.K) AS K,
+            SUM(events_custom.DP) AS DP,
+            SUM(events_custom.TP) AS TP,
             {"" if self.find == "player" else "SUM(SB) AS SB,"}
             {"" if self.find == "player" else "SUM(CS) AS CS,"}
-            SUM(events.ROE) AS ROE,
-            SUM(events.FC) AS FC,
-            SUM(events.R) AS R,
-            SUM(events.RBI) AS RBI,
-            SUM(events.GB) AS GB,
-            SUM(events.LD) AS LD,
-            SUM(events.FB) AS FB,
-            SUM(events.PU) AS PU
-        FROM events
-        LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
-        WHERE
-            {self.query_where}
+            SUM(events_custom.ROE) AS ROE,
+            SUM(events_custom.FC) AS FC,
+            SUM(events_custom.R) AS R,
+            SUM(events_custom.RBI) AS RBI,
+            SUM(events_custom.GB) AS GB,
+            SUM(events_custom.LD) AS LD,
+            SUM(events_custom.FB) AS FB,
+            SUM(events_custom.PU) AS PU
+        FROM events_custom
+        LEFT JOIN cwgame ON events_custom.GAME_ID = cwgame.GAME_ID
         GROUP BY {", ".join(to_group_by)}
         """
         # Just for data display purposes
         to_group_original = to_group_by.copy()
-        if "events.BAT_TEAM_ID" in to_group_by:
-            to_group_by.remove("events.BAT_TEAM_ID")
+        if "events_custom.BAT_TEAM_ID" in to_group_by:
+            to_group_by.remove("events_custom.BAT_TEAM_ID")
             to_group_by.append("team")
-        if "events.RESP_BAT_ID" in to_group_by:
-            to_group_original.remove("events.RESP_BAT_ID")
-            to_group_by.remove("events.RESP_BAT_ID")
+        if "events_custom.RESP_BAT_ID" in to_group_by:
+            to_group_original.remove("events_custom.RESP_BAT_ID")
+            to_group_by.remove("events_custom.RESP_BAT_ID")
             to_group_by.append("player_id")
 
         if self.split == "game":
-            to_group_by.remove("events.GAME_ID")
-            to_group_by.append("events.game_id")
+            to_group_by.remove("events_custom.GAME_ID")
+            to_group_by.append("events_custom.game_id")
         df = pd.read_sql(query, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])  # type: ignore
 
         # Separate query for SB and CS if find is player
         if self.find == "player":
-            # The baserunning table's RESP_BAT_ID is NOT the same as events.RESP_BAT_ID (baserunner is not the same as the real batter)
+            # The baserunning table's RESP_BAT_ID is NOT the same as events_custom.RESP_BAT_ID (baserunner is not the same as the real batter)
             # I probably shouldn't have used RESP_BAT_ID in this table, but it comes from when I did this a different way with Pandas
             # So, these two lines are both VERY important
             to_group_original.append("baserunning.RESP_BAT_ID")
-            query_select = query_select.replace("events.RESP_BAT_ID", "baserunning.RESP_BAT_ID")
+            query_select = query_select.replace("events_custom.RESP_BAT_ID", "baserunning.RESP_BAT_ID")
             query_baserunning = f"""
             SELECT
-                {query_select}
+                {query_select.replace("events_custom.", "events.")}
                 SUM(baserunning.SB_indiv) AS SB,
                 SUM(baserunning.CS_indiv) AS CS
             FROM baserunning
             LEFT JOIN cwgame ON baserunning.GAME_ID = cwgame.GAME_ID
             LEFT JOIN events ON events.file_index = baserunning.file_index AND events.GAME_ID = baserunning.GAME_ID
             WHERE {self.query_where}
-            GROUP BY {", ".join(to_group_original)};
+            GROUP BY {", ".join(to_group_original).replace("events_custom.", "events.")};
             """
             df_baserunning = pd.read_sql(query_baserunning, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the baserunning DataFrame with the main DataFrame
             df = df.merge(df_baserunning, how="left", on=["year", "player_id", "team", "month", "day", "game_id"])
 
-        df["SB"] = df["SB"].fillna(0).astype(int)
-        df["CS"] = df["CS"].fillna(0).astype(int)
+        df["SB"] = df["SB"].fillna(0).infer_objects()
+        df["CS"] = df["CS"].fillna(0).infer_objects()
 
         self.stats = df.sort_values(by=[elem.split(".")[-1] for elem in to_group_by])
 
@@ -358,6 +376,10 @@ class PitchingStatsCalculator(StatCalculator):
         find: str = "player",
         split: str = "year",
         query_where: str = "",
+        custom_column_where: str = "",
+        custom_cols: dict = {},
+        custom_select: str = "",
+        wins_included: bool = False,
     ):
         """
         Args:
@@ -366,7 +388,7 @@ class PitchingStatsCalculator(StatCalculator):
             find (str): The split of the data. It can be "player" or "team".
             split (str): The split of the data. It can be "year", "month", "career", "day", or "game".
         """
-        super().__init__(linear_weights, find, split, query_where)
+        super().__init__(linear_weights, find, split, query_where, custom_column_where=custom_column_where, custom_cols=custom_cols, custom_select=custom_select, wins_included=wins_included)
 
         self.basic_stat_columns = [
             "G",
@@ -436,34 +458,34 @@ class PitchingStatsCalculator(StatCalculator):
         # A list which contains the columns that are being grouped (based on split and find)
         to_group_by: list[str] = []
         if self.find == "player":
-            to_group_by.append("events.RESP_PIT_ID")
+            to_group_by.append("events_custom.RESP_PIT_ID")
         elif self.find == "team":
-            to_group_by.append("events.FLD_TEAM_ID")
+            to_group_by.append("events_custom.FLD_TEAM_ID")
 
         if self.split == "year":
-            to_group_by.append("events.year")
+            to_group_by.append("events_custom.year")
         elif self.split == "month":
-            to_group_by.append("events.year")
-            to_group_by.append("events.month")
+            to_group_by.append("events_custom.year")
+            to_group_by.append("events_custom.month")
         elif self.split == "day":
-            to_group_by.append("events.year")
-            to_group_by.append("events.month")
-            to_group_by.append("events.day")
+            to_group_by.append("events_custom.year")
+            to_group_by.append("events_custom.month")
+            to_group_by.append("events_custom.day")
         elif self.split == "game":
-            to_group_by.append("events.GAME_ID")
+            to_group_by.append("events_custom.GAME_ID")
 
         # Create a row for each player grouping
         if self.split == "year":
             query_select = """
-            MIN(events.year) as year,
+            MIN(events_custom.year) as year,
             NULL as month,
             NULL as day,
             NULL as game_id,
             """
         elif self.split == "month":
             query_select = """
-            MIN(events.year) as year,
-            MIN(events.month) as month,
+            MIN(events_custom.year) as year,
+            MIN(events_custom.month) as month,
             NULL as day,
             NULL as game_id,
             """
@@ -476,99 +498,107 @@ class PitchingStatsCalculator(StatCalculator):
             """
         elif self.split == "day":
             query_select = """
-            MIN(events.year) as year,
-            MIN(events.month) as month,
-            MIN(events.day) as day,
+            MIN(events_custom.year) as year,
+            MIN(events_custom.month) as month,
+            MIN(events_custom.day) as day,
             NULL as game_id,
             """
         elif self.split == "game":
             query_select = """
-            MIN(events.year) as year,
-            MIN(events.month) as month,
-            MIN(events.day) as day,
-            MIN(events.GAME_ID) as game_id,
+            MIN(events_custom.year) as year,
+            MIN(events_custom.month) as month,
+            MIN(events_custom.day) as day,
+            MIN(events_custom.GAME_ID) as game_id,
             """
         else:
             raise ValueError(f"split must be 'year', 'month', 'career', 'day', or 'game', not '{self.split}'")
         if self.find == "player":
             if self.split == "game":
                 query_select = """
-                MIN(events.RESP_PIT_ID) as player_id,
-                MIN(events.FLD_TEAM_ID) as team,
+                MIN(events_custom.RESP_PIT_ID) as player_id,
+                MIN(events_custom.FLD_TEAM_ID) as team,
                 """ + query_select
             else:
                 query_select = """
-                MIN(events.RESP_PIT_ID) as player_id,
-                CASE WHEN COUNT(DISTINCT events.FLD_TEAM_ID) = 1 THEN MIN(events.FLD_TEAM_ID) ELSE COUNT(DISTINCT events.FLD_TEAM_ID) || " Teams" END as team,
+                MIN(events_custom.RESP_PIT_ID) as player_id,
+                CASE WHEN COUNT(DISTINCT events_custom.FLD_TEAM_ID) = 1 THEN MIN(events_custom.FLD_TEAM_ID) ELSE COUNT(DISTINCT events_custom.FLD_TEAM_ID) || " Teams" END as team,
                 """ + query_select
         elif self.find == "team":
             query_select = """
             NULL as player_id,
-            MIN(events.FLD_TEAM_ID) as team,
+            MIN(events_custom.FLD_TEAM_ID) as team,
             """ + query_select
         else:
             raise ValueError(f"find must be 'player' or 'team', not '{self.find}'")
 
         query = f"""
+        WITH {", ".join([f"\"{alias}_cte\" AS ({col})" for alias, col in self.custom_cols.items()])}{", " if self.custom_cols else ""} events_custom AS (
+            SELECT events.*{", " + self.custom_select if self.custom_select else ""}
+            FROM events
+            LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
+            {" ".join([f"LEFT JOIN \"{alias}_cte\" ON \"{alias}_cte\".GAME_ID = events.GAME_ID" for alias, _ in self.custom_cols.items()])}
+            WHERE {self.query_where}{" AND " + self.custom_column_where if self.custom_column_where else ""}  -- Filter by query_where and custom_column_where
+        )
         SELECT
             {query_select}
             min(year) as start_year,
             max(year) as end_year,
-            COUNT(DISTINCT events.GAME_ID) AS G, 
-            COUNT(DISTINCT CASE WHEN events.RESP_PIT_START_FL = 1 THEN events.GAME_ID END) AS GS,
-            SUM(events.EVENT_OUTS_CT) * 1.0 / 3.0 AS IP,
-            SUM(events.PA) AS TBF,
-            SUM(events.AB) AS AB,
-            SUM(events.H) AS H,
-            {"" if self.find == "player" else "SUM(events.R) AS R,"}
-            {"" if self.find == "player" else "SUM(events.ER) AS ER,"}
-            {"" if self.find == "player" else "SUM(events.UER) AS UER,"}
-            SUM(events."1B") AS "1B",
-            SUM(events."2B") AS "2B",
-            SUM(events."3B") AS "3B",
-            SUM(events.HR) AS HR,
-            SUM(events.UBB) AS UBB,
-            SUM(events.IBB) AS IBB,
-            SUM(events.HBP) AS HBP,
-            SUM(events.DP) AS DP,
-            SUM(events.TP) AS TP,
-            SUM(events.WP) AS WP,
-            SUM(events.BK) AS BK,
-            SUM(events.K) AS K,
-            SUM(events.P) AS P,
-            SUM(events.GB) AS GB,
-            SUM(events.LD) AS LD,
-            SUM(events.FB) AS FB,
-            SUM(events.PU) AS PU,
-            SUM(events.SH) AS SH,
-            SUM(events.SF) AS SF
-        FROM events
-        LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
-        WHERE {self.query_where}
+            {"count(DISTINCT events_custom.win)" if self.wins_included else "NULL"} as win,
+            {"count(DISTINCT events_custom.loss)" if self.wins_included else "NULL"} as loss,
+            COUNT(DISTINCT events_custom.GAME_ID) AS G, 
+            COUNT(DISTINCT CASE WHEN events_custom.RESP_PIT_START_FL = 1 THEN events_custom.GAME_ID END) AS GS,
+            SUM(events_custom.EVENT_OUTS_CT) * 1.0 / 3.0 AS IP,
+            SUM(events_custom.PA) AS TBF,
+            SUM(events_custom.AB) AS AB,
+            SUM(events_custom.H) AS H,
+            {"" if self.find == "player" else "SUM(events_custom.R) AS R,"}
+            {"" if self.find == "player" else "SUM(events_custom.ER) AS ER,"}
+            {"" if self.find == "player" else "SUM(events_custom.UER) AS UER,"}
+            SUM(events_custom."1B") AS "1B",
+            SUM(events_custom."2B") AS "2B",
+            SUM(events_custom."3B") AS "3B",
+            SUM(events_custom.HR) AS HR,
+            SUM(events_custom.UBB) AS UBB,
+            SUM(events_custom.IBB) AS IBB,
+            SUM(events_custom.HBP) AS HBP,
+            SUM(events_custom.DP) AS DP,
+            SUM(events_custom.TP) AS TP,
+            SUM(events_custom.WP) AS WP,
+            SUM(events_custom.BK) AS BK,
+            SUM(events_custom.K) AS K,
+            SUM(events_custom.P) AS P,
+            SUM(events_custom.GB) AS GB,
+            SUM(events_custom.LD) AS LD,
+            SUM(events_custom.FB) AS FB,
+            SUM(events_custom.PU) AS PU,
+            SUM(events_custom.SH) AS SH,
+            SUM(events_custom.SF) AS SF
+        FROM events_custom
+        LEFT JOIN cwgame ON events_custom.GAME_ID = cwgame.GAME_ID
         GROUP BY {", ".join(to_group_by)}
         """
         to_group_original = to_group_by.copy()
-        if "events.FLD_TEAM_ID" in to_group_by:
-            to_group_by.remove("events.FLD_TEAM_ID")
+        if "events_custom.FLD_TEAM_ID" in to_group_by:
+            to_group_by.remove("events_custom.FLD_TEAM_ID")
             to_group_by.append("team")
-        if "events.RESP_PIT_ID" in to_group_by:
-            to_group_original.remove("events.RESP_PIT_ID")
-            to_group_by.remove("events.RESP_PIT_ID")
+        if "events_custom.RESP_PIT_ID" in to_group_by:
+            to_group_original.remove("events_custom.RESP_PIT_ID")
+            to_group_by.remove("events_custom.RESP_PIT_ID")
             to_group_by.append("player_id")
         if self.split == "game":
-            to_group_by.remove("events.GAME_ID")
-            to_group_by.append("events.game_id")
+            to_group_by.remove("events_custom.GAME_ID")
+            to_group_by.append("events_custom.game_id")
         for idx, item in enumerate(to_group_by):
-            if item.startswith("events."):
+            if item.startswith("events_custom."):
                 to_group_by[idx] = item.split(".")[-1]
         df = pd.read_sql(query, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])  # type: ignore
 
         # Separate query for R, UER, ER if find is player
         if self.find == "player":
-            # The pitching runs table's RESP_PIT_ID is NOT the same as events.RESP_PIT_ID (baserunner is not the same as the real batter)
+            # The pitching runs table's RESP_PIT_ID is NOT the same as events_custom.RESP_PIT_ID (baserunner is not the same as the real batter)
             # I probably shouldn't have used RESP_PIT_ID in this table, but it comes from when I did this a different way with Pandas
             to_group_original.append("pitching_runs.RESP_PIT_ID")
-            query_select = query_select.replace("events.RESP_PIT_ID", "pitching_runs.RESP_PIT_ID")
+            query_select = query_select.replace("events_custom.RESP_PIT_ID", "pitching_runs.RESP_PIT_ID")
             query_run_scoring = f"""
             SELECT
                 {query_select}
@@ -577,16 +607,16 @@ class PitchingStatsCalculator(StatCalculator):
                 SUM(pitching_runs.UER_indiv) AS UER
             FROM pitching_runs
             LEFT JOIN cwgame ON pitching_runs.GAME_ID = cwgame.GAME_ID
-            LEFT JOIN events ON events.file_index = pitching_runs.file_index AND events.GAME_ID = pitching_runs.GAME_ID
+            LEFT JOIN events ON events_custom.file_index = pitching_runs.file_index AND events_custom.GAME_ID = pitching_runs.GAME_ID
             WHERE {self.query_where}
             GROUP BY {", ".join(to_group_original)};
             """
             df_run_scoring = pd.read_sql(query_run_scoring, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the run scoring DataFrame with the main DataFrame
             df = df.merge(df_run_scoring, how="left", on=["year", "player_id", "team", "month", "day", "game_id"])
-        df["R"] = df["R"].fillna(0).astype(int)
-        df["ER"] = df["ER"].fillna(0).astype(int)
-        df["UER"] = df["UER"].fillna(0).astype(int)
+        df["R"] = df["R"].fillna(0).infer_objects()
+        df["ER"] = df["ER"].fillna(0).infer_objects()
+        df["UER"] = df["UER"].fillna(0).infer_objects()
 
         self.stats = df.sort_values(by=[elem.split(".")[-1] for elem in to_group_by])
 

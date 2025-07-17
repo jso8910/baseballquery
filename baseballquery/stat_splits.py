@@ -12,6 +12,9 @@ class StatSplits:
 
         self.linear_weights = get_linear_weights()  # type: ignore
         self.sql_query_where = defaultdict(str)
+        self.sql_custom_columns_where = defaultdict(str)
+        self.custom_table_cols = defaultdict(str)
+        self.custom_select = defaultdict(str)
 
         years = get_years()
         if years_list is not None:
@@ -32,6 +35,7 @@ class StatSplits:
         self.stats: pd.DataFrame = pd.DataFrame()
         self.split = "year"
         self.find = "player"
+        self.wins_included = False
 
     def set_split(self, split: str):
         """
@@ -89,6 +93,8 @@ class StatSplits:
         for idx, day in enumerate(days_of_week):
             days_of_week[idx] = day.capitalize()
         self.sql_query_where["day_week"] = f"cwgame.GAME_DY IN ({', '.join([f'\'{day}\'' for day in days_of_week])})"
+
+        self.wins_included = False
 
     def set_batter_handedness_pa(self, handedness: str):
         """
@@ -329,6 +335,207 @@ class StatSplits:
         assert all((0 <= base_situation < 8) for base_situation in base_situations), "Invalid base situation"  # type: ignore
         self.sql_query_where["start_bases_cd"] = f"events.START_BASES_CD IN ({', '.join([str(base_situation) for base_situation in base_situations])})"
 
+    def stat_start_inning(self, home_team: str, conditions: list[dict], return_opposing_stats: bool = False):
+        """
+        Limit the data to only include games in which a certain stat is equal to a certain value at the start of a specific inning.
+        Recommended to not be used with set_subdivision(player) as it will not have eg W/L records,
+        but if you want to see how individual players perform when their team is doing well, you're welcome to.
+        If a game did not reach an inning (eg bottom of 9th in home team win, or if a game ends early before the 9th inning) the game will not be included.
+
+        Parameters:
+        home_team (bool): Which team is batting—True for home team, False for away team
+        conditions (list[dict]): List of dictionaries containing the following keys:
+            - inning (int): The inning number
+            - top (bool): True for top of the inning, False for bottom of the inning
+            - stat (str): The stat to filter by (e.g. "OUTS_CT", "RUNS_CT")
+            - value (int): The value to filter by
+            - operator (str): The operator to use for filtering (default is "=")
+        return_opposing_stats (bool): Whether to return the stats achieved by home_team or the opposing team. If True, will return the opposite of home_team.
+        """
+        col_names = []
+        assert isinstance(conditions, list), "Invalid col_names type"
+        assert home_team in ["home", "away", "either"], "Invalid value for home_team"
+        for item in conditions:
+            inning = item["inning"]
+            top = item["top"]
+            stat = item["stat"]
+            value = item["value"]
+            operator = item["operator"]
+            assert operator in ["=", "<", ">", "<=", ">=", "!="], "Invalid operator"
+            # Ensure input is santized
+            assert isinstance(inning, int) and inning > 0, "Invalid inning number"
+            assert isinstance(top, bool), "Invalid top/bottom inning value"
+            assert isinstance(value, int), "Invalid value"
+            assert all(c.isalnum() or c == "_" for c in stat), "Invalid stat name"
+
+
+            # Create a WHERE clause to apply to subqueries (but we don't want subquery recursion)
+            sql_where_str = self.sql_query_where["year"]
+            col_name = f"{stat}_by_start_{'top' if top else 'bottom'}_{inning}"
+            col_names.append(col_name)
+            if isinstance(self, BattingStatSplits):
+                isBatting = True
+            elif isinstance(self, PitchingStatSplits):
+                isBatting = False
+            else:
+                raise ValueError("Invalid StatSplits subclass. Must be BattingStatSplits or PitchingStatSplits.")
+
+            if stat in ["SCORE", "SCORE_DIFF"]:
+                if stat == "SCORE":
+                    stat_home = "events.HOME_SCORE_CT"
+                    stat_away = "events.AWAY_SCORE_CT"
+                elif stat == "SCORE_DIFF":
+                    stat_home = "events.HOME_SCORE_CT - events.AWAY_SCORE_CT"
+                    stat_away = "events.AWAY_SCORE_CT - events.HOME_SCORE_CT"
+                else:
+                    raise ValueError()  # Should never happen, but just in case. If I forget to update the code when adding new values, it will raise an error
+                if top:
+                    # Top of the inning: home team hasn't batted yet in this inning
+                    self.custom_table_cols[f"{col_name}_home"] = f"""
+                        SELECT events.GAME_ID, FIRST_VALUE({stat_home}) OVER (
+                            PARTITION BY events.GAME_ID
+                            ORDER BY events.INN_CT DESC
+                        ) as "{col_name}_home"
+                        FROM events
+                        WHERE {sql_where_str} AND events.INN_CT = {inning} and events.BAT_TEAM_ID != events.HOME_TEAM_ID
+                        GROUP BY events.GAME_ID
+                    """
+                    # Away team: get the first value in this inning for the away team
+                    self.custom_table_cols[f"{col_name}_away"] = f"""
+                        SELECT events.GAME_ID, FIRST_VALUE({stat_away}) OVER (
+                            PARTITION BY events.GAME_ID
+                            ORDER BY events.INN_CT
+                        ) as "{col_name}_away"
+                        FROM events
+                        WHERE {sql_where_str} AND events.INN_CT = {inning} and events.BAT_TEAM_ID != events.HOME_TEAM_ID
+                        GROUP BY events.GAME_ID
+                    """
+                else:
+                    # Bottom of the inning: get the first value in this inning for the home team
+                    self.custom_table_cols[f"{col_name}_home"] = f"""
+                        SELECT events.GAME_ID, FIRST_VALUE({stat_home}) OVER (
+                            PARTITION BY events.GAME_ID
+                            ORDER BY events.INN_CT
+                        ) as "{col_name}_home"
+                        FROM events
+                        WHERE {sql_where_str} AND events.INN_CT = {inning} and events.BAT_TEAM_ID = events.HOME_TEAM_ID
+                        GROUP BY events.GAME_ID
+                    """
+                    # Away team:
+                    self.custom_table_cols[f"{col_name}_away"] = f"""
+                        SELECT events.GAME_ID, FIRST_VALUE({stat_away}) OVER (
+                            PARTITION BY events.GAME_ID
+                            ORDER BY events.INN_CT DESC
+                        ) as "{col_name}_away"
+                        FROM events
+                        WHERE {sql_where_str} AND events.INN_CT = {inning} and events.BAT_TEAM_ID != events.HOME_TEAM_ID
+                        GROUP BY events.GAME_ID
+                    """
+            else:
+                # Create two temporary columns—one to measure the home team and one to measure the away team
+                # Since the home team bats in the bottom of the inning, the current inning will never be included
+                self.custom_table_cols[f"{col_name}_home"] = f"""
+                        SELECT events.GAME_ID, sum(CASE WHEN events.INN_CT < {inning} and events.BAT_TEAM_ID {"=" if isBatting else "!="} events.HOME_TEAM_ID THEN events.\"{stat}\" ELSE 0 END) as "{col_name}_home"
+                        FROM events
+                        WHERE {sql_where_str}
+                        GROUP BY events.GAME_ID
+                        HAVING SUM(CASE WHEN events.INN_CT = {inning} AND events.BAT_TEAM_ID {'!=' if top else '='} events.HOME_TEAM_ID THEN 1 ELSE 0 END) > 0
+                """
+                # Since the away team bats in the top of the inning, it will be included if we want the stats going into the bottom of the inning
+                self.custom_table_cols[f"{col_name}_away"] = f"""
+                        SELECT events.GAME_ID, sum(CASE WHEN events.INN_CT {"<" if top else "<="} {inning} and events.BAT_TEAM_ID {"!=" if isBatting else "="} events.HOME_TEAM_ID THEN events.\"{stat}\" ELSE 0 END) as "{col_name}_away"
+                        FROM events
+                        WHERE {sql_where_str}
+                        GROUP BY events.GAME_ID
+                        HAVING SUM(CASE WHEN events.INN_CT = {inning} AND events.BAT_TEAM_ID {'!=' if top else '='} events.HOME_TEAM_ID THEN 1 ELSE 0 END) > 0
+                """
+
+            if home_team == "home":
+                self.sql_custom_columns_where[f"subquery_{col_name}_{home_team}_{top}_{value}_{operator}"] = f"\"{col_name}_home_cte\".\"{col_name}_home\" {operator} {value}"
+            elif home_team == "away":
+                self.sql_custom_columns_where[f"subquery_{col_name}_{home_team}_{top}_{value}_{operator}"] = f"\"{col_name}_away_cte\".\"{col_name}_away\" {operator} {value}"
+            else:
+                # If home_team is "either", we need to check both home and away teams
+                self.sql_custom_columns_where[f"subquery_{col_name}_{home_team}_{top}_{value}_{operator}"] = f"(\"{col_name}_home_cte\".\"{col_name}_home\" {operator} {value} OR \"{col_name}_away_cte\".\"{col_name}_away\" {operator} {value})"
+
+        # Only return stats for the relevant team (either the team which achieved the outcome or the opposing team)
+        if (home_team == "home" and not return_opposing_stats) or (home_team == "away" and return_opposing_stats):
+            if isinstance(self, BattingStatSplits):
+                team_check_str = "events.HOME_TEAM_ID = events.BAT_TEAM_ID"
+            elif isinstance(self, PitchingStatSplits):
+                team_check_str = "events.HOME_TEAM_ID = events.FLD_TEAM_ID"
+            else:
+                raise ValueError("Invalid StatSplits subclass")
+            self.sql_query_where["query_list_inning"] = team_check_str
+        elif (home_team == "away" and not return_opposing_stats) or (home_team == "home" and return_opposing_stats):
+            if isinstance(self, BattingStatSplits):
+                team_check_str = "events.HOME_TEAM_ID != events.BAT_TEAM_ID"
+            elif isinstance(self, PitchingStatSplits):
+                team_check_str = "events.HOME_TEAM_ID != events.FLD_TEAM_ID"
+            else:
+                raise ValueError("Invalid StatSplits subclass")
+            self.sql_query_where["query_list_inning"] = team_check_str
+        elif home_team == "either":
+            # Make sure we only include PAs where the team batting or pitching fulfills the condition
+            if isinstance(self, BattingStatSplits):
+                team_check_str = "events.BAT_TEAM_ID"
+            elif isinstance(self, PitchingStatSplits):
+                team_check_str = "events.FLD_TEAM_ID"
+            else:
+                raise ValueError("Invalid StatSplits subclass")
+            self.sql_query_where["query_list_inning"] = f"""(
+            (
+                {team_check_str} {"=" if not return_opposing_stats else "!="} events.HOME_TEAM_ID AND
+                {" AND ".join(f"\"{col_names[i]}_home_cte\".\"{col_names[i]}_home\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}
+            ) OR (
+                {team_check_str} {"!=" if not return_opposing_stats else "="} events.HOME_TEAM_ID AND
+                {" AND ".join(f"\"{col_names[i]}_away_cte\".\"{col_names[i]}_away\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}
+            ))"""
+
+        # We want to get the win/loss record for these games. If "either" is selected, we want to get the win/loss record for any team that fulfilled the condition
+        # Only select win/loss record if self.find is "team"
+        if self.find != "team":
+            return
+
+        if (home_team == "home" and not return_opposing_stats) or (home_team == "away" and return_opposing_stats):
+            self.custom_select[f"win" if isinstance(self, BattingStatSplits) else f"loss"] = f"""
+                    CASE WHEN (cwgame.FINAL_HOME_SCORE_CT > cwgame.FINAL_AWAY_SCORE_CT) THEN events.GAME_ID ELSE NULL END
+            """
+            self.custom_select[f"loss" if isinstance(self, BattingStatSplits) else f"win"] = f"""
+                    CASE WHEN (cwgame.FINAL_HOME_SCORE_CT < cwgame.FINAL_AWAY_SCORE_CT) THEN events.GAME_ID ELSE NULL END
+            """
+        elif (home_team == "away" and not return_opposing_stats) or (home_team == "home" and return_opposing_stats):
+            self.custom_select[f"win" if isinstance(self, BattingStatSplits) else f"loss"] = f"""
+                    CASE WHEN (cwgame.FINAL_AWAY_SCORE_CT > cwgame.FINAL_HOME_SCORE_CT) THEN events.GAME_ID ELSE NULL END
+            """
+            self.custom_select[f"loss" if isinstance(self, BattingStatSplits) else f"win"] = f"""
+                    CASE WHEN (cwgame.FINAL_AWAY_SCORE_CT < cwgame.FINAL_HOME_SCORE_CT) THEN events.GAME_ID ELSE NULL END
+            """
+        elif home_team == "either":
+            if isinstance(self, BattingStatSplits):
+                self.custom_select[f"win" if isinstance(self, BattingStatSplits) else f"loss"] = f"""
+                        CASE WHEN (events.BAT_TEAM_ID {"=" if not return_opposing_stats else "!="} events.HOME_TEAM_ID AND cwgame.FINAL_HOME_SCORE_CT {">" if not return_opposing_stats else "<"} cwgame.FINAL_AWAY_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_home_cte\".\"{col_names[i]}_home\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        WHEN (events.BAT_TEAM_ID {"!=" if not return_opposing_stats else "="} events.HOME_TEAM_ID AND cwgame.FINAL_AWAY_SCORE_CT {">" if not return_opposing_stats else "<"} cwgame.FINAL_HOME_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_away_cte\".\"{col_names[i]}_away\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        ELSE NULL END
+                """
+                self.custom_select[f"loss" if isinstance(self, BattingStatSplits) else f"win"] = f"""
+                        CASE WHEN (events.BAT_TEAM_ID {"=" if not return_opposing_stats else "!="} events.HOME_TEAM_ID AND cwgame.FINAL_HOME_SCORE_CT {"<" if not return_opposing_stats else ">"} cwgame.FINAL_AWAY_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_home_cte\".\"{col_names[i]}_home\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        WHEN (events.BAT_TEAM_ID {"!=" if not return_opposing_stats else "="} events.HOME_TEAM_ID AND cwgame.FINAL_AWAY_SCORE_CT {"<" if not return_opposing_stats else ">"} cwgame.FINAL_HOME_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_away_cte\".\"{col_names[i]}_away\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        ELSE NULL END
+                """
+            else:
+                self.custom_select[f"win"] = f"""
+                        CASE WHEN (events.FLD_TEAM_ID {"=" if not return_opposing_stats else "!="} events.HOME_TEAM_ID AND cwgame.FINAL_HOME_SCORE_CT {">" if not return_opposing_stats else "<"} cwgame.FINAL_AWAY_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_home_cte\".\"{col_names[i]}_home\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        WHEN (events.FLD_TEAM_ID {"!=" if not return_opposing_stats else "="} events.HOME_TEAM_ID AND cwgame.FINAL_AWAY_SCORE_CT {">" if not return_opposing_stats else "<"} cwgame.FINAL_HOME_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_away_cte\".\"{col_names[i]}_away\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        ELSE NULL END
+                """
+                self.custom_select[f"loss"] = f"""
+                        CASE WHEN (events.FLD_TEAM_ID {"=" if not return_opposing_stats else "!="} events.HOME_TEAM_ID AND cwgame.FINAL_HOME_SCORE_CT {"<" if not return_opposing_stats else ">"} cwgame.FINAL_AWAY_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_home_cte\".\"{col_names[i]}_home\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        WHEN (events.FLD_TEAM_ID {"!=" if not return_opposing_stats else "="} events.HOME_TEAM_ID AND cwgame.FINAL_AWAY_SCORE_CT {"<" if not return_opposing_stats else ">"} cwgame.FINAL_HOME_SCORE_CT AND {" AND ".join(f"\"{col_names[i]}_away_cte\".\"{col_names[i]}_away\" {item["operator"]} {item["value"]}" for i, item in enumerate(conditions))}) THEN (events.GAME_ID)
+                        ELSE NULL END
+                """
+        self.wins_included = True
+
 
 class BattingStatSplits(StatSplits):
     def __init__(self, start_year: int = 0, end_year: int = 0, years_list: list[int] | None = None, events: pd.DataFrame | None = None):
@@ -347,7 +554,15 @@ class BattingStatSplits(StatSplits):
         where_clauses = [self.sql_query_where[key] for key in self.sql_query_where]
         where_clause = " AND ".join(where_clauses)
 
-        self.batting_calculator = BattingStatsCalculator(self.linear_weights, find=self.find, split=self.split, query_where=where_clause)  # type: ignore
+        # Formulate custom columns for SQL query
+        custom_clauses = [self.sql_custom_columns_where[key] for key in self.sql_custom_columns_where]
+        custom_column_where = " AND ".join(custom_clauses)
+
+        custom_cols = self.custom_table_cols
+
+        custom_select = ", ".join([f"{col} AS \"{alias}\"" for alias, col in self.custom_select.items()])
+
+        self.batting_calculator = BattingStatsCalculator(self.linear_weights, find=self.find, split=self.split, query_where=where_clause, custom_column_where=custom_column_where, custom_cols=custom_cols, custom_select=custom_select, wins_included=self.wins_included)  # type: ignore
         self.batting_calculator.calculate_all_stats()
         self.stats = self.batting_calculator.stats
 
@@ -382,7 +597,15 @@ class PitchingStatSplits(StatSplits):
         where_clauses = [self.sql_query_where[key] for key in self.sql_query_where]
         where_clause = " AND ".join(where_clauses)
 
-        self.pitching_calculator = PitchingStatsCalculator(self.linear_weights, find=self.find, split=self.split, query_where=where_clause)  # type: ignore
+        # Formulate custom columns for SQL query
+        custom_clauses = [self.sql_custom_columns_where[key] for key in self.sql_custom_columns_where]
+        custom_column_where = " AND ".join(custom_clauses)
+
+        custom_cols = self.custom_table_cols
+
+        custom_select = ", ".join([f"{col} AS \"{alias}\"" for alias, col in self.custom_select.items()])
+
+        self.pitching_calculator = PitchingStatsCalculator(self.linear_weights, find=self.find, split=self.split, query_where=where_clause, custom_cols=custom_cols, custom_column_where=custom_column_where, custom_select=custom_select, wins_included=self.wins_included)  # type: ignore
         self.pitching_calculator.calculate_all_stats()
         self.stats = self.pitching_calculator.stats
 

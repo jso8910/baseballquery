@@ -122,6 +122,10 @@ class ParseGame:
         else:
             self.game_info["SAVE_PIT_ID"] = None
 
+        self.game_info["FINAL_INN_CT"] = self.game["liveData"]["linescore"]["currentInning"]
+        self.game_info["FINAL_HOME_SCORE_CT"] = self.game["liveData"]["linescore"]["teams"]["home"]["runs"]
+        self.game_info["FINAL_AWAY_SCORE_CT"] = self.game["liveData"]["linescore"]["teams"]["away"]["runs"]
+
     def parse(self):
         runners = [None, None, None]
         runner_resp_pit_id = [None, None, None]

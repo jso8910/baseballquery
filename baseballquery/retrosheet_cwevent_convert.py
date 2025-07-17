@@ -57,7 +57,7 @@ def convert_files_to_csv():
                         "cwgame",
                         "-q",
                         "-f",
-                        "0,3,4,6,9,18,26-32,42-44",
+                        "0,3,4,6,9,18,26-35,42-44",
                         f"-y",
                         f"{file.stem[:4]}",
                         f"-n",
@@ -79,6 +79,7 @@ def convert_files_to_csv():
     for file in tqdm(list(outdir.iterdir()), desc="Converting Chadwick CSVs to Feather", position=1, leave=False):
         if file.name.startswith("cwgame-"):
             df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"])  # type: ignore
+            df = df.rename({"INN_CT": "FINAL_INN_CT", "HOME_SCORE_CT": "FINAL_HOME_SCORE_CT", "AWAY_SCORE_CT": "FINAL_AWAY_SCORE_CT"}, axis=1)
             df.astype(cwgame_dtypes)
             year = int(file.name[7:11])
             years_cwgame[year] = pd.concat([years_cwgame[year], df])

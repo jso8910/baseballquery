@@ -147,4 +147,7 @@ cwgame_dtypes = {
     "WIN_PIT_ID": "object",
     "LOSE_PIT_ID": "object",
     "SAVE_PIT_ID": "object",
+    "FINAL_INN_CT": "Int64",
+    "FINAL_HOME_SCORE_CT": "Int64",
+    "FINAL_AWAY_SCORE_CT": "Int64",
 }
