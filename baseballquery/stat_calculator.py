@@ -601,15 +601,15 @@ class PitchingStatsCalculator(StatCalculator):
             query_select = query_select.replace("events_custom.RESP_PIT_ID", "pitching_runs.RESP_PIT_ID")
             query_run_scoring = f"""
             SELECT
-                {query_select}
+                {query_select.replace("events_custom.", "events.")}
                 SUM(pitching_runs.R_indiv) AS R,
                 SUM(pitching_runs.ER_indiv) AS ER,
                 SUM(pitching_runs.UER_indiv) AS UER
             FROM pitching_runs
             LEFT JOIN cwgame ON pitching_runs.GAME_ID = cwgame.GAME_ID
-            LEFT JOIN events ON events_custom.file_index = pitching_runs.file_index AND events_custom.GAME_ID = pitching_runs.GAME_ID
+            LEFT JOIN events ON events.file_index = pitching_runs.file_index AND events.GAME_ID = pitching_runs.GAME_ID
             WHERE {self.query_where}
-            GROUP BY {", ".join(to_group_original)};
+            GROUP BY {", ".join(to_group_original).replace("events_custom.", "events.")};
             """
             df_run_scoring = pd.read_sql(query_run_scoring, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the run scoring DataFrame with the main DataFrame
