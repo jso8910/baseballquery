@@ -5,8 +5,12 @@ import json
 from .convert_mlbam import ConvertMLBAM
 from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
 from .parse_game import ParseGame
-from tqdm import tqdm
+import tqdm
+from tqdm.asyncio import tqdm_asyncio
 from .utils import get_year_events
+import msgspec
+import aiohttp
+import asyncio
 
 
 class ParseSeason:
@@ -26,6 +30,21 @@ class ParseSeason:
         r.raise_for_status()
         schedule = r.json()
         return schedule
+
+    async def fetch(self, session, url):
+        async with session.get(url) as response:
+            if response.status != 200:
+                response.raise_for_status()
+            return await response.json()
+
+    async def download_data(self, game_set):
+        # data_l = []
+        async with aiohttp.ClientSession(json_serialize=msgspec.json.decode) as session:
+            tasks = []
+            for game in list(game_set):
+                tasks.append(asyncio.create_task(self.fetch(session, f"https://statsapi.mlb.com{game}")))
+            results = await tqdm_asyncio.gather(*tasks, desc="Fetching Data", position=1, leave=False)
+        return results
 
     def parse(self):
         try:
@@ -49,16 +68,25 @@ class ParseSeason:
                 games.add(game["link"])
         if not games:
             return
-        cwd = Path(__file__).parent
         event_types_list = json.loads(open(Path(__file__).parent / "eventTypes.json").read())
-        for game in tqdm(list(games), desc="Games", position=0, leave=True):
-            game_data = requests.get(f"https://statsapi.mlb.com{game}").json()
+        data_l = asyncio.run(self.download_data(games))
+        game_df_l = []
+        game_info_df_l = []
+        for game_data in tqdm.tqdm(data_l, desc="Parsing games", position=1, leave=False):
             parse_game = ParseGame(game_data, self.convert_mlbam, event_types_list)
             parse_game.parse()
             parse_game.parse_game_info()
             parse_game.df["mlbam_id"] = game_data["gamePk"]
-            self.df = pd.concat([self.df, parse_game.df])
-            self.game_info = pd.concat([self.game_info, pd.DataFrame([parse_game.game_info])])
+            game_df_l.append(parse_game.df)
+            game_info_df_l.append(pd.DataFrame([parse_game.game_info]))
+        del data_l # Free memory
+        df_new = pd.concat(game_df_l)
+        df_new = df_new.astype(chadwick_dtypes)
+        self.df = pd.concat([self.df, df_new])
+        print(self.df)
         self.df = self.df.reset_index(drop=True)
+
+        self.game_info = pd.concat([self.game_info, *game_info_df_l])
+        self.game_info = self.game_info.astype(cwgame_dtypes)
         self.game_info = self.game_info.reset_index(drop=True)
         return self.df, self.game_info

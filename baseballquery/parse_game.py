@@ -3,13 +3,16 @@ from datetime import datetime
 from .parse_plate_appearance import ParsePlateAppearance
 from .convert_mlbam import ConvertMLBAM
 from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
+import line_profiler
+import numpy as np
 
 
 class ParseGame:
     def __init__(self, game: dict, convert_id: ConvertMLBAM, event_types_list: list[dict]):
         self.game = game
-        self.df = pd.DataFrame(columns=chadwick_dtypes.keys())  # type: ignore
-        self.df = self.df.astype(chadwick_dtypes)
+        # self.df = pd.DataFrame(columns=chadwick_dtypes.keys())  # type: ignore
+        # self.df = self.df.astype(chadwick_dtypes)
+        self.data = []
         self.starting_lineup_away = {}
         self.starting_lineup_home = {}
         self.convert_id = convert_id
@@ -74,9 +77,12 @@ class ParseGame:
 
         self.game_info: dict[str, int|str|None] = {key: None for key in cwgame_dtypes.keys()}
 
+    @line_profiler.profile
     def parse_game_info(self):
         self.game_info["GAME_ID"] = self.game_id
-        dt = datetime.strptime(self.game["gameData"]["datetime"]["officialDate"], "%Y-%m-%d")
+        # dt = datetime.strptime(self.game["gameData"]["datetime"]["officialDate"], "%Y-%m-%d")
+        date = self.game["gameData"]["datetime"]["officialDate"]
+        dt = datetime.fromisoformat(date)
         self.game_info["GAME_DY"] = dt.weekday()
         self.game_info["START_GAME_TM"] = int(self.game["gameData"]["datetime"]["time"].replace(":", ""))
         self.game_info["DAYNIGHT_PARK_CD"] = "N" if self.game["gameData"]["datetime"]["dayNight"] == "night" else "D"
@@ -126,6 +132,7 @@ class ParseGame:
         self.game_info["FINAL_HOME_SCORE_CT"] = self.game["liveData"]["linescore"]["teams"]["home"]["runs"]
         self.game_info["FINAL_AWAY_SCORE_CT"] = self.game["liveData"]["linescore"]["teams"]["away"]["runs"]
 
+    @line_profiler.profile
     def parse(self):
         runners = [None, None, None]
         runner_resp_pit_id = [None, None, None]
@@ -141,6 +148,10 @@ class ParseGame:
                 # This sometimes happens (eg https://www.mlb.com/gameday/rockies-vs-giants/2024/07/27/745307/final/summary/all)
                 # Where there is a random empty plate appearance. This one was after a game ending challenge, that could be why
                 continue
+            eventTypes = {event["code"]: event for event in self.event_types_list}
+            # eventTypes documentation from https://statsapi.mlb.com/api/v1/eventTypes
+            # Custom proxy property for foul_error
+            eventTypes["foul_error"] = eventTypes["error"]
             pa = ParsePlateAppearance(
                 plate_appearance,
                 self.game["liveData"]["plays"]["allPlays"][:idx],
@@ -160,22 +171,46 @@ class ParseGame:
                 self.convert_id,
                 runners,  # type: ignore
                 runner_resp_pit_id,  # type: ignore
-                self.event_types_list
+                eventTypes,
             )
             pa.parse()
-            self.df = pd.concat([self.df, pa.df], ignore_index=True)
+            # self.df = pd.concat([self.df, pa.df], ignore_index=True)
+            self.data.extend(pa.data)
             if plate_appearance["about"]["isTopInning"]:
-                self.away_score += pa.df["EVENT_RUNS_CT"].sum()
+                self.away_score += sum(elem["EVENT_RUNS_CT"] for elem in pa.data)
             else:
-                self.home_score += pa.df["EVENT_RUNS_CT"].sum()
+                self.home_score += sum(elem["EVENT_RUNS_CT"] for elem in pa.data)
 
-        innings = self.df.groupby(["INN_CT", "BAT_TEAM_ID"])
-        for _, inning in innings:
-            inning["FATE_RUNS_CT"] = (
-                inning["AWAY_SCORE_CT"]
-                if inning["BAT_TEAM_ID"].iloc[0] == inning["AWAY_TEAM_ID"].iloc[0]
-                else inning["HOME_SCORE_CT"]
-            )
-            inning["FATE_RUNS_CT"] += inning["EVENT_RUNS_CT"]
-            inning["FATE_RUNS_CT"] = inning["FATE_RUNS_CT"].iloc[-1] - inning["FATE_RUNS_CT"]
-            self.df.update(inning)
+        self.df = pd.DataFrame(self.data, columns=chadwick_dtypes.keys())   # type: ignore
+
+        self._calculate_fate_runs_vectorized()
+
+    @line_profiler.profile
+    def _calculate_fate_runs_vectorized(self):
+        """Vectorized FATE_RUNS_CT calculation"""
+        if self.df.empty:
+            return
+        
+        # Create a mask for away team batting
+        away_batting = self.df["BAT_TEAM_ID"] == self.df["AWAY_TEAM_ID"]
+        
+        # Calculate base scores (before adding EVENT_RUNS_CT)
+        base_scores = np.where(away_batting, self.df["AWAY_SCORE_CT"], self.df["HOME_SCORE_CT"])
+        
+        # Add event runs to get total scores
+        total_scores = base_scores + self.df["EVENT_RUNS_CT"]
+        
+        # Add total_scores as a temporary column
+        self.df["_temp_total_scores"] = total_scores
+        
+        # Group by inning and team
+        grouped = self.df.groupby(["INN_CT", "BAT_TEAM_ID"])
+        
+        # Calculate the final score for each group (last total score in each inning)
+        final_scores = grouped["_temp_total_scores"].transform('last')
+        
+        # FATE_RUNS_CT = final score of inning - current total score
+        self.df["FATE_RUNS_CT"] = final_scores - self.df["_temp_total_scores"]
+        
+        # Remove the temporary column
+        self.df.drop("_temp_total_scores", axis=1, inplace=True)

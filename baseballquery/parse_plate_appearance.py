@@ -4,61 +4,13 @@ from copy import deepcopy
 import requests
 from collections import defaultdict
 from .chadwick_cols import chadwick_dtypes, chadwick_defaults
-
+import line_profiler
+import msgspec.json as mjson
 
 class ParsePlateAppearance:
-    def __init__(
-        self,
-        plate_appearance: dict,
-        prev_game_plays: dict,
-        game_id: str,
-        away_team: str,
-        home_team: str,
-        starting_lineup_away: dict[int, str],
-        starting_lineup_home: dict[int, str],
-        positions: dict[int, int],
-        player_lineup_spots: dict[str, int],
-        away_starting_pitcher: str,
-        home_starting_pitcher: str,
-        away_pitcher: list[str],
-        home_pitcher: list[str],
-        away_score: int,
-        home_score: int,
-        convert_id: ConvertMLBAM,
-        runners: list[str | None],
-        resp_pitchers: list[str | None],
-        event_types_list: list[dict],
-        top_level_pa: bool = True,
-        ghost_runner_added: bool = False,
-        run_scored_ct_prev: int = 0,
-    ) -> None:
-        self.plate_appearance = plate_appearance
-        self.prev_game_plays = prev_game_plays
-        self.game_id = game_id
-        self.away_team = away_team
-        self.home_team = home_team
-        self.starting_lineup_away = starting_lineup_away
-        self.starting_lineup_home = starting_lineup_home
-        self.away_pitcher = away_pitcher
-        self.home_pitcher = home_pitcher
-        self.away_score = away_score
-        self.home_score = home_score
-        self.positions = positions
-        self.player_lineup_spots = player_lineup_spots
-        self.away_starting_pitcher = away_starting_pitcher
-        self.home_starting_pitcher = home_starting_pitcher
-        self.convert_id = convert_id
-        self.df = pd.DataFrame(columns=chadwick_dtypes.keys())  # type: ignore
-        self.df = self.df.astype(chadwick_dtypes)
-        self.runners = runners
-        self.resp_pitchers = resp_pitchers
-        self.top_level_pa = top_level_pa
-        self.ghost_runner_added = ghost_runner_added
-        self.run_scored_ct_prev = run_scored_ct_prev
-        self.event_types_list = event_types_list
-
-    def parse(self) -> None:
-        event_type_to_cwevent = {
+    # Class level cache
+    _player_cache = {}
+    _event_type_to_cwevent = {
             "pickoff_1b": 8,
             "pickoff_2b": 8,
             "pickoff_3b": 8,
@@ -74,7 +26,7 @@ class ParsePlateAppearance:
             "triple": 22,
             "home_run": 23,
             # 'double_play': 11,             # NOTE: Need special case for this. Pretty sure it's always in play, fielded, out. Seems to be a mix of fielder's choice double play and line into double play and fly into double play
-            "field_error": 2,
+            "field_error": 18,
             "error": 12,
             "field_out": 2,
             "fielders_choice": 19,
@@ -135,7 +87,59 @@ class ParsePlateAppearance:
             "other_out": 12,
             "foul_error": 13,
         }
+    def __init__(
+        self,
+        plate_appearance: dict,
+        prev_game_plays: dict,
+        game_id: str,
+        away_team: str,
+        home_team: str,
+        starting_lineup_away: dict[int, str],
+        starting_lineup_home: dict[int, str],
+        positions: dict[int, int],
+        player_lineup_spots: dict[str, int],
+        away_starting_pitcher: str,
+        home_starting_pitcher: str,
+        away_pitcher: list[str],
+        home_pitcher: list[str],
+        away_score: int,
+        home_score: int,
+        convert_id: ConvertMLBAM,
+        runners: list[str | None],
+        resp_pitchers: list[str | None],
+        event_types: dict,
+        top_level_pa: bool = True,
+        ghost_runner_added: bool = False,
+        run_scored_ct_prev: int = 0,
+    ) -> None:
+        self.plate_appearance = plate_appearance
+        self.prev_game_plays = prev_game_plays
+        self.game_id = game_id
+        self.away_team = away_team
+        self.home_team = home_team
+        self.starting_lineup_away = starting_lineup_away
+        self.starting_lineup_home = starting_lineup_home
+        self.away_pitcher = away_pitcher
+        self.home_pitcher = home_pitcher
+        self.away_score = away_score
+        self.home_score = home_score
+        self.positions = positions
+        self.player_lineup_spots = player_lineup_spots
+        self.away_starting_pitcher = away_starting_pitcher
+        self.home_starting_pitcher = home_starting_pitcher
+        self.convert_id = convert_id
+        # self.df = pd.DataFrame(columns=chadwick_dtypes.keys())  # type: ignore
+        # self.df = self.df.astype(chadwick_dtypes)
+        self.data = []
+        self.runners = runners
+        self.resp_pitchers = resp_pitchers
+        self.top_level_pa = top_level_pa
+        self.ghost_runner_added = ghost_runner_added
+        self.run_scored_ct_prev = run_scored_ct_prev
+        self.event_types = event_types
 
+    @line_profiler.profile
+    def parse(self) -> None:
         row: dict[str, None | str | float | int | bool] = {
             col: chadwick_defaults[col] for col in chadwick_dtypes.keys()
         }
@@ -221,7 +225,7 @@ class ParsePlateAppearance:
         for movement_index in sorted(list(movement_indices)):
             if movement_index == len(self.plate_appearance["playEvents"]) - 1:
                 continue
-            modified_pa = deepcopy(self.plate_appearance)
+            modified_pa = mjson.decode(mjson.encode(self.plate_appearance))
             # Only include playEvents up to the runner event
             modified_pa["playEvents"] = modified_pa["playEvents"][: movement_index + 1]
             modified_pa["runners"] = list(
@@ -246,16 +250,17 @@ class ParsePlateAppearance:
                 self.convert_id,
                 self.runners,
                 self.resp_pitchers,
-                self.event_types_list,
+                self.event_types,
                 top_level_pa=False,
                 ghost_runner_added=self.ghost_runner_added,
-                run_scored_ct_prev=self.df["EVENT_RUNS_CT"].sum(),
+                run_scored_ct_prev=sum(elem["EVENT_RUNS_CT"] for elem in self.data),
             )
             # After the first sub_pa has been parsed, the ghost runner has already been added. Don't add again!
             self.ghost_runner_added = True
             latest_runner_subs_processed = movement_index
             sub_pa.parse()
-            self.df = pd.concat([self.df, sub_pa.df], ignore_index=True)
+            # self.df = pd.concat([self.df, sub_pa.df], ignore_index=True)
+            self.data.extend(sub_pa.data)
         self.plate_appearance["runners"] = list(
             filter(
                 lambda x: x["details"]["playIndex"] == len(self.plate_appearance["playEvents"]) - 1,
@@ -442,7 +447,11 @@ class ParsePlateAppearance:
                 if event["count"]["strikes"] == 2 and self.plate_appearance["playEvents"][-1]["count"]["strikes"] == 3:
                     row["RESP_BAT_ID"] = old_code
                     # We need to make another request to get the batter handedness
-                    bat_old = requests.get(f"https://statsapi.mlb.com{event['replacedPlayer']['link']}").json()
+                    if event['replacedPlayer']['link'] not in self._player_cache:
+                        bat_old = requests.get(f"https://statsapi.mlb.com{event['replacedPlayer']['link']}").json()
+                        self._player_cache[event['replacedPlayer']['link']] = bat_old
+                    else:
+                        bat_old = self._player_cache[event['replacedPlayer']['link']]
                     row["RESP_BAT_HAND_CD"] = bat_old["people"][0]["batSide"]["code"]
 
                     # Sadly we can't get for certain which hand the player batted with, so in this very rare circumstance
@@ -479,12 +488,16 @@ class ParsePlateAppearance:
                         self.home_pitcher[1] if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher[1]
                     )
                 # If there were any previous plays, we need to change RESP_PIT_ID and RESP_PIT_START_FL for the previous baserunning plays
-                for i, _ in self.df.iterrows():
+                # for i, _ in self.df.iterrows():
+                for i in range(len(self.data)):
                     pitcher = self.home_pitcher if self.plate_appearance["about"]["isTopInning"] else self.away_pitcher
-                    self.df.loc[i, "RESP_PIT_ID"] = pitcher[0]  # type: ignore
-                    self.df.loc[i, "RESP_PIT_HAND_CD"] = pitcher[1]  # type: ignore
+                    # self.df.loc[i, "RESP_PIT_ID"] = pitcher[0]  # type: ignore
+                    self.data[i]["RESP_PIT_ID"] = pitcher[0]  # type: ignore
+                    # self.df.loc[i, "RESP_PIT_HAND_CD"] = pitcher[1]  # type: ignore
+                    self.data[i]["RESP_PIT_HAND_CD"] = pitcher[1]  # type: ignore
                     if pitcher[0] == self.away_starting_pitcher or pitcher[0] == self.home_starting_pitcher:
-                        self.df.loc[i, "RESP_PIT_START_FL"] = True  # type: ignore
+                        # self.df.loc[i, "RESP_PIT_START_FL"] = True  # type: ignore
+                        self.data[i]["RESP_PIT_START_FL"] = True  # type: ignore
                 if self.plate_appearance["about"]["isTopInning"]:
                     self.home_pitcher[0] = new_code
                     self.home_pitcher[1] = self.plate_appearance["matchup"]["pitchHand"]["code"]
@@ -536,7 +549,7 @@ class ParsePlateAppearance:
         # We don't want any baserunning events from the same origin and different destinations on the same play
         origin_bases = set()
         origin_base_runner_events = defaultdict(list)
-        original_runners = deepcopy(self.plate_appearance["runners"])
+        original_runners = mjson.decode(mjson.encode(self.plate_appearance["runners"]))
         # The latest one is the longest advance
         for idx in reversed(range(len(self.plate_appearance["runners"]))):
             if (
@@ -690,11 +703,13 @@ class ParsePlateAppearance:
         row["EVENT_RUNS_CT"] = runs_scored
         if self.plate_appearance["about"]["isTopInning"]:
             # run_scored_ct_prev is the number of runs scored by
-            row["AWAY_SCORE_CT"] = self.away_score + self.df["EVENT_RUNS_CT"].sum() + self.run_scored_ct_prev
+            # row["AWAY_SCORE_CT"] = self.away_score + self.df["EVENT_RUNS_CT"].sum() + self.run_scored_ct_prev
+            row["AWAY_SCORE_CT"] = self.away_score + sum(elem["EVENT_RUNS_CT"] for elem in self.data) + self.run_scored_ct_prev
             row["HOME_SCORE_CT"] = self.home_score
         else:
             row["AWAY_SCORE_CT"] = self.away_score
-            row["HOME_SCORE_CT"] = self.home_score + self.df["EVENT_RUNS_CT"].sum() + self.run_scored_ct_prev
+            # row["HOME_SCORE_CT"] = self.home_score + self.df["EVENT_RUNS_CT"].sum() + self.run_scored_ct_prev
+            row["HOME_SCORE_CT"] = self.home_score + sum(elem["EVENT_RUNS_CT"] for elem in self.data) + self.run_scored_ct_prev
         row["RBI_CT"] = rbis
         row["END_BASES_CD"] = 0
         for i, runner in enumerate(self.runners):
@@ -704,12 +719,6 @@ class ParsePlateAppearance:
 
         ## Process event type
         event_type = self.plate_appearance["playEvents"][-1]["details"]["eventType"]
-
-        # eventTypes documentation from https://statsapi.mlb.com/api/v1/eventTypes
-        event_types_list = self.event_types_list
-        eventTypes = {event["code"]: event for event in event_types_list}
-        # Custom proxy property for foul_error
-        eventTypes["foul_error"] = eventTypes["error"]
 
         # Special cases for sac_bunt and sac_fly
         if event_type in ("sac_bunt", "sac_bunt_double_play"):
@@ -722,7 +731,7 @@ class ParsePlateAppearance:
                     r for r in original_runners if r["movement"]["originBase"] == None and not r["movement"]["isOut"]
                 )
                 if any("error" in c["credit"] for c in r["credits"]):
-                    event_code = 2
+                    event_code = 18
                     row["BAT_SAFE_ERR_FL"] = True
                 else:
                     event_code = 19  # fielder's choice
@@ -752,7 +761,7 @@ class ParsePlateAppearance:
             event_code = 2
         else:
             # Get the event code
-            event_code = event_type_to_cwevent.get(event_type, 100)
+            event_code = self._event_type_to_cwevent.get(event_type, 100)
             # Sometimes the event code is 2 but the batter still reaches on an error
             if event_code == 2:
                 try:
@@ -791,7 +800,7 @@ class ParsePlateAppearance:
 
         # Check if the event is an at bat (PA but not catcher's interference or sacrifice or walk or HBP)
         if (
-            eventTypes[event_type]["plateAppearance"]
+            self.event_types[event_type]["plateAppearance"]
             and not row["SF_FL"]
             and not row["SH_FL"]
             and not event_code in (14, 15, 16, 17)
@@ -799,10 +808,12 @@ class ParsePlateAppearance:
             row["AB_FL"] = True
 
         # If this is the top level PA (ie not a sub PA), and the event is not a plate appearance, set PA_TRUNC_FL for all events
-        if self.top_level_pa and not eventTypes[event_type]["plateAppearance"]:
+        if self.top_level_pa and not self.event_types[event_type]["plateAppearance"]:
             row["PA_TRUNC_FL"] = True
-            for i, _ in self.df.iterrows():
-                self.df.loc[i, "PA_TRUNC_FL"] = True  # type: ignore
+            # for i, _ in self.df.iterrows():
+            #     self.df.loc[i, "PA_TRUNC_FL"] = True  # type: ignore
+            for i in range(len(self.data)):
+                self.data[i]["PA_TRUNC_FL"] = True  # type: ignore
 
         # Set H_CD
         if event_code in [20, 21, 22, 23]:
@@ -883,4 +894,5 @@ class ParsePlateAppearance:
                 row["BATTEDBALL_CD"] = "L"
 
         row["BAT_LINEUP_ID"] = self.player_lineup_spots[row["RESP_BAT_ID"]]
-        self.df = pd.concat([self.df, pd.DataFrame([row])], ignore_index=True)
+        # self.df = pd.concat([self.df, pd.DataFrame([row])], ignore_index=True)
+        self.data.append(row)
