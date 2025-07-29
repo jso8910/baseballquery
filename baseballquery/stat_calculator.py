@@ -286,15 +286,21 @@ class BattingStatsCalculator(StatCalculator):
             to_group_original.append("baserunning.RESP_BAT_ID")
             query_select = query_select.replace("events_custom.RESP_BAT_ID", "baserunning.RESP_BAT_ID")
             query_baserunning = f"""
+            WITH {", ".join([f"\"{alias}_cte\" AS ({col})" for alias, col in self.custom_cols.items()])}{", " if self.custom_cols else ""} events_custom AS (
+                SELECT events.*{", " + self.custom_select if self.custom_select else ""}
+                FROM events
+                LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
+                {" ".join([f"LEFT JOIN \"{alias}_cte\" ON \"{alias}_cte\".GAME_ID = events.GAME_ID" for alias, _ in self.custom_cols.items()])}
+                WHERE {self.query_where}{" AND " + self.custom_column_where if self.custom_column_where else ""}  -- Filter by query_where and custom_column_where
+            )
             SELECT
-                {query_select.replace("events_custom.", "events.")}
+                {query_select}
                 SUM(baserunning.SB_indiv) AS SB,
                 SUM(baserunning.CS_indiv) AS CS
             FROM baserunning
             LEFT JOIN cwgame ON baserunning.GAME_ID = cwgame.GAME_ID
-            LEFT JOIN events ON events.file_index = baserunning.file_index AND events.GAME_ID = baserunning.GAME_ID
-            WHERE {self.query_where}
-            GROUP BY {", ".join(to_group_original).replace("events_custom.", "events.")};
+            LEFT JOIN events_custom ON events_custom.file_index = baserunning.file_index AND events_custom.GAME_ID = baserunning.GAME_ID
+            GROUP BY {", ".join(to_group_original)};
             """
             df_baserunning = pd.read_sql(query_baserunning, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the baserunning DataFrame with the main DataFrame
@@ -600,16 +606,22 @@ class PitchingStatsCalculator(StatCalculator):
             to_group_original.append("pitching_runs.RESP_PIT_ID")
             query_select = query_select.replace("events_custom.RESP_PIT_ID", "pitching_runs.RESP_PIT_ID")
             query_run_scoring = f"""
+            WITH {", ".join([f"\"{alias}_cte\" AS ({col})" for alias, col in self.custom_cols.items()])}{", " if self.custom_cols else ""} events_custom AS (
+                SELECT events.*{", " + self.custom_select if self.custom_select else ""}
+                FROM events
+                LEFT JOIN cwgame ON events.GAME_ID = cwgame.GAME_ID
+                {" ".join([f"LEFT JOIN \"{alias}_cte\" ON \"{alias}_cte\".GAME_ID = events.GAME_ID" for alias, _ in self.custom_cols.items()])}
+                WHERE {self.query_where}{" AND " + self.custom_column_where if self.custom_column_where else ""}  -- Filter by query_where and custom_column_where
+            )
             SELECT
-                {query_select.replace("events_custom.", "events.")}
+                {query_select}
                 SUM(pitching_runs.R_indiv) AS R,
                 SUM(pitching_runs.ER_indiv) AS ER,
                 SUM(pitching_runs.UER_indiv) AS UER
             FROM pitching_runs
             LEFT JOIN cwgame ON pitching_runs.GAME_ID = cwgame.GAME_ID
-            LEFT JOIN events ON events.file_index = pitching_runs.file_index AND events.GAME_ID = pitching_runs.GAME_ID
-            WHERE {self.query_where}
-            GROUP BY {", ".join(to_group_original).replace("events_custom.", "events.")};
+            LEFT JOIN events_custom ON events_custom.file_index = pitching_runs.file_index AND events_custom.GAME_ID = pitching_runs.GAME_ID
+            GROUP BY {", ".join(to_group_original)};
             """
             df_run_scoring = pd.read_sql(query_run_scoring, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
             # Merge the run scoring DataFrame with the main DataFrame
