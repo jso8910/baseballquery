@@ -130,7 +130,6 @@ class ParseGame:
         self.game_info["FINAL_HOME_SCORE_CT"] = self.game["liveData"]["linescore"]["teams"]["home"]["runs"]
         self.game_info["FINAL_AWAY_SCORE_CT"] = self.game["liveData"]["linescore"]["teams"]["away"]["runs"]
 
-    @line_profiler.profile
     def parse(self):
         runners = [None, None, None]
         runner_resp_pit_id = [None, None, None]
@@ -183,7 +182,6 @@ class ParseGame:
 
         self._calculate_fate_runs_vectorized()
 
-    @line_profiler.profile
     def _calculate_fate_runs_vectorized(self):
         """Vectorized FATE_RUNS_CT calculation"""
         if self.df.empty:
