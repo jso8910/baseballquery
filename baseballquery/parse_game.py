@@ -3,7 +3,6 @@ from datetime import datetime
 from .parse_plate_appearance import ParsePlateAppearance
 from .convert_mlbam import ConvertMLBAM
 from .chadwick_cols import chadwick_dtypes, cwgame_dtypes
-import line_profiler
 import numpy as np
 
 
@@ -77,7 +76,6 @@ class ParseGame:
 
         self.game_info: dict[str, int|str|None] = {key: None for key in cwgame_dtypes.keys()}
 
-    @line_profiler.profile
     def parse_game_info(self):
         self.game_info["GAME_ID"] = self.game_id
         # dt = datetime.strptime(self.game["gameData"]["datetime"]["officialDate"], "%Y-%m-%d")
