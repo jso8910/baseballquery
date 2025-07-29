@@ -4,7 +4,6 @@ from copy import deepcopy
 import requests
 from collections import defaultdict
 from .chadwick_cols import chadwick_dtypes, chadwick_defaults
-import line_profiler
 import msgspec.json as mjson
 
 class ParsePlateAppearance:
@@ -138,7 +137,6 @@ class ParsePlateAppearance:
         self.run_scored_ct_prev = run_scored_ct_prev
         self.event_types = event_types
 
-    @line_profiler.profile
     def parse(self) -> None:
         row: dict[str, None | str | float | int | bool] = {
             col: chadwick_defaults[col] for col in chadwick_dtypes.keys()
