@@ -300,6 +300,7 @@ class BattingStatsCalculator(StatCalculator):
             FROM baserunning
             LEFT JOIN cwgame ON baserunning.GAME_ID = cwgame.GAME_ID
             LEFT JOIN events_custom ON events_custom.file_index = baserunning.file_index AND events_custom.GAME_ID = baserunning.GAME_ID
+            WHERE {self.query_where.replace("events", "events_custom")}
             GROUP BY {", ".join(to_group_original)};
             """
             df_baserunning = pd.read_sql(query_baserunning, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
@@ -621,6 +622,7 @@ class PitchingStatsCalculator(StatCalculator):
             FROM pitching_runs
             LEFT JOIN cwgame ON pitching_runs.GAME_ID = cwgame.GAME_ID
             LEFT JOIN events_custom ON events_custom.file_index = pitching_runs.file_index AND events_custom.GAME_ID = pitching_runs.GAME_ID
+            WHERE {self.query_where.replace("events", "events_custom")}
             GROUP BY {", ".join(to_group_original)};
             """
             df_run_scoring = pd.read_sql(query_run_scoring, engine, index_col=[elem.split(".")[-1] for elem in to_group_by])
