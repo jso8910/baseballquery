@@ -23,14 +23,6 @@ def convert_files_to_csv():
         if not file.name[-4:] in (".EVN", ".EVA"):
             continue
 
-        # NOTE: This is a very specific bug I need to fix
-        if file.name == "1978CLE.EVA":
-            with file.open("r") as f:
-                filedata = f.read()
-            filedata = filedata.replace("play,5,0,lynnf001,*BCSS,,K", "play,5,0,lynnf001,12,*BCSS,K")
-            with file.open("w") as f:
-                f.write(filedata)
-
         # Process event-level info with cwevent
         with open(outdir / f"{file.name}.csv", "w") as f:
             try:
@@ -95,6 +87,9 @@ def convert_files_to_csv():
         df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"])  # type: ignore
         df["MLB_STATSAPI_APPROX"] = False
         df["mlbam_id"] = None
+        # Change non numeric or integer values from BALLS_CT and STRIKES_CT to NA
+        df["BALLS_CT"] = pd.to_numeric(df["BALLS_CT"], errors="coerce")
+        df["STRIKES_CT"] = pd.to_numeric(df["STRIKES_CT"], errors="coerce")
         df.astype(chadwick_dtypes)
         year = int(file.name[:4])
         years[year] = pd.concat([years[year], df])  # type: ignore
