@@ -90,6 +90,11 @@ def convert_files_to_csv():
         # Change non numeric or integer values from BALLS_CT and STRIKES_CT to NA
         df["BALLS_CT"] = pd.to_numeric(df["BALLS_CT"], errors="coerce")
         df["STRIKES_CT"] = pd.to_numeric(df["STRIKES_CT"], errors="coerce")
+
+        # TODO: At some point, actually allow NA values
+        # And check for the count_tx == "??" to convert 0,0 counts to NA,NA counts (since cwevent doesn't distinguish by default)
+        df["BALLS_CT"] = df["BALLS_CT"].fillna(0)
+        df["STRIKES_CT"] = df["STRIKES_CT"].fillna(0)
         df.astype(chadwick_dtypes)
         year = int(file.name[:4])
         years[year] = pd.concat([years[year], df])  # type: ignore
