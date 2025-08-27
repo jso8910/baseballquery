@@ -86,11 +86,11 @@ def convert_files_to_csv():
             continue
         # NOTE: This is a very specific bug I need to fix
         if file.name == "1978CLE.EVA.csv":
-            with open(file.name, 'r') as file:
-                filedata = file.read()
+            with file.open("r") as f:
+                filedata = f.read()
             filedata = filedata.replace("play,5,0,lynnf001,*BCSS,,K", "play,5,0,lynnf001,12,*BCSS,K")
-            with open(file.name, "w") as file:
-                file.write(filedata)
+            with file.open("w") as f:
+                f.write(filedata)
         df: pd.DataFrame = pd.read_csv(file, true_values=["t", "T"], false_values=["f", "F"])  # type: ignore
         df["MLB_STATSAPI_APPROX"] = False
         df["mlbam_id"] = None
